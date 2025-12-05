@@ -24,7 +24,7 @@ openai = OpenAI()
 #AAS MESSAGE BUFFER 
 
 
-AAS_SERVER_URL = "http://localhost:5001"
+AAS_SERVER_URL = "http://localhost:5001/api/v3.0"
 #AAS_IDSHORT = "CarASS"
 
 AAS_MESSAGES = deque(maxlen=200)
@@ -156,7 +156,8 @@ def _list_all_aas() -> list[dict]:
     print(f"DEBUG: Listing AAS shells from: {url}")
 
     try:
-        resp = requests.get(url, timeout=5)
+        resp = requests.get(url, headers={"Accept": "application/json"}, timeout=5)
+
         resp.raise_for_status()
         data = resp.json()
 
@@ -177,21 +178,16 @@ def _list_all_aas() -> list[dict]:
         return []
 
 def _get_submodel_list(aas_id: str | None = None) -> list[dict]:
-    """Return the raw JSON list of submodels for a given AAS."""
-    # If no AAS ID provided, pick the first shell
-    if not aas_id:
-        shells = _list_all_aas()
-        if not shells:
-            raise ValueError("No AAS shells found on server.")
-        # Prefer idShort if present, else id
-        aas_id = shells[0].get("id") or shells[0].get("idShort")
-        print(f"DEBUG: Using AAS id: {aas_id}")
+    """
+    Return the raw JSON list of submodels.
 
-    encoded_aas_id = _encode_id_for_path(aas_id) if "://" in aas_id else aas_id
-    url = f"{AAS_SERVER_URL}/shells/{encoded_aas_id}/submodels"
+    NOTE: For this AASXServerBlazor setup we use the global /submodels
+    endpoint, because /shells/{id}/submodels returns HTML (UI), not JSON.
+    """
+    url = f"{AAS_SERVER_URL}/submodels"
     print(f"DEBUG: Getting submodels from: {url}")
 
-    resp = requests.get(url, timeout=5)
+    resp = requests.get(url, headers={"Accept": "application/json"}, timeout=5)
     print(f"DEBUG: Status: {resp.status_code}")
     print(f"DEBUG: Content-Type: {resp.headers.get('content-type')}")
 
@@ -203,8 +199,9 @@ def _get_submodel_list(aas_id: str | None = None) -> list[dict]:
     elif isinstance(data, list):
         return data
 
-    print(f"DEBUG: Unexpected submodels structure: {data}")
+    print(f"DEBUG: Unexpected /submodels structure: {data}")
     return []
+
 
 def _load_submodel_by_idshort(id_short: str, aas_id: str | None = None) -> dict | None:
     """Find a submodel by idShort and return its full JSON."""
@@ -229,12 +226,12 @@ def _load_submodel_by_idshort(id_short: str, aas_id: str | None = None) -> dict 
     print(f"DEBUG: Fetching submodel from: {url}")
 
     try:
-        resp = requests.get(url, timeout=5)
+        resp = requests.get(url, headers={"Accept": "application/json"}, timeout=5)
         if resp.status_code == 404:
             # Try alternative path used by some servers
             url_alt = f"{AAS_SERVER_URL}/submodels/{encoded_id}/submodel"
             print(f"DEBUG: Trying alternative: {url_alt}")
-            resp = requests.get(url_alt, timeout=5)
+            resp = requests.get(url_alt, headers={"Accept": "application/json"}, timeout=5)
 
         resp.raise_for_status()
         return resp.json()
@@ -355,7 +352,7 @@ def read_all_submodels():
         try:
             encoded_id = _encode_id_for_path(raw_id)
             url = f"{AAS_SERVER_URL}/submodels/{encoded_id}/submodel"
-            r = requests.get(url, timeout=5)
+            r = requests.get(url, headers={"Accept": "application/json"}, timeout=5)
             r.raise_for_status()
             result[id_short] = r.json()
         except Exception as e:
@@ -379,9 +376,9 @@ def get_operational_values():
         return f"Failed to read OperationalData: {e}"
 
 ##Agent
-listener_ai_prompt = (
+listener_ai_prompt = ( ##MELJORAR
     "You are a listener, whose job it is to listen to an AASX "
-    "(Asset Administration Shell) system. You also have tools that can "
+    "(Asset Administration Shell Explorer) system. You also have tools that can "
     "query the AAS server directly (list_submodels, read_submodel, "
     "read_all_submodels, get_operational_values). "
     "Whenever the user asks about submodels or operational values, "
