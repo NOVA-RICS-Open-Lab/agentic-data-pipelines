@@ -1,0 +1,24 @@
+services:
+  aasx-server:
+    container_name: aasx-server 
+    image: docker.io/adminshellio/aasx-server-blazor-for-demo:0.3.1.284-aasv3-alpha-latest
+    restart: unless-stopped
+    ports:
+      - 5001:5001
+    environment:
+      - Kestrel__Endpoints__Http__Url=http://*:5001
+    volumes:
+      - ./aasxs:/AasxServerBlazor/aasxs
+    command: --no-security --external-blazor http://localhost:5001
+    
+  neo4j:
+    image: neo4j:5
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: "neo4j/password123"
+    volumes:
+      - ./data/neo4j/data:/data
+      - ./data/neo4j/logs:/logs
+      - ./data/neo4j/plugins:/plugins
