@@ -40,16 +40,6 @@ services:
     networks:
       - agentic-net
 
-  gradio-ui:
-    container_name: gradio-ui
-    build: ./gradio-ui
-    depends_on:
-      - agent-runtime
-    ports:
-      - "7860:7860"
-    networks:
-      - agentic-net
-
 networks:
   agentic-net:
     name: agentic-net

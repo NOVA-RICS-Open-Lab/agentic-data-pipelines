@@ -1,16 +1,16 @@
-from fastapi import FastAPI
-from  src.config import Settings
+import gradio as gr
+from src.agents import MainAgent
 
-app = FastAPI(title="Agentic Pipelines")
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+async def run(query: str):
+    async for chunk in MainAgent.run(query):
+        yield chunk
 
-@app.get("/config")
-def config():
-    settings = Settings()
-    return {
-        "aas_url": settings.AAS_BASE_URL,
-        "neo4j_uri": settings.NEO4J_URI,
-    }
+
+with gr.Blocks(theme=gr.themes.Default(primary_hue="sky")) as ui:
+    gr.Markdown("## Agentic Pipelines Chat Interface")
+    chat_input = gr.Textbox(label="Ask about your system")
+    chat_output = gr.Markdown(label="System Response")
+    chat_input.submit(fn=run, inputs=chat_input, outputs=chat_output)
+
+ui.launch(server_name="0.0.0.0", server_port=7860)
