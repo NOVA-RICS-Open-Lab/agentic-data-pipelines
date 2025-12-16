@@ -1,18 +1,22 @@
 services:
   aasx-server:
-    container_name: aasx-server 
+    container_name: aasx-server
     image: docker.io/adminshellio/aasx-server-blazor-for-demo:0.3.1.284-aasv3-alpha-latest
     restart: unless-stopped
     ports:
-      - 5001:5001
+      - "5001:5001"
     environment:
       - Kestrel__Endpoints__Http__Url=http://*:5001
     volumes:
       - ./aasxs:/AasxServerBlazor/aasxs
     command: --no-security --external-blazor http://localhost:5001
-    
+    networks:
+      - agentic-net
+
   neo4j:
+    container_name: neo4j
     image: neo4j:5
+    restart: unless-stopped
     ports:
       - "7474:7474"
       - "7687:7687"
@@ -22,3 +26,31 @@ services:
       - ./neo4j/data:/data
       - ./neo4j/logs:/logs
       - ./neo4j/plugins:/plugins
+    networks:
+      - agentic-net
+
+  agent-runtime:
+    container_name: agent-runtime
+    build: ./agent-runtime
+    depends_on:
+      - aasx-server
+      - neo4j
+    ports:
+      - "8000:8000"
+    networks:
+      - agentic-net
+
+  gradio-ui:
+    container_name: gradio-ui
+    build: ./gradio-ui
+    depends_on:
+      - agent-runtime
+    ports:
+      - "7860:7860"
+    networks:
+      - agentic-net
+
+networks:
+  agentic-net:
+    name: agentic-net
+    driver: bridge
