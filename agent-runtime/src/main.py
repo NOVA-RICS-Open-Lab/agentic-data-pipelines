@@ -1,11 +1,13 @@
 import gradio as gr
-from src.agents import MainAgent
-
+from src.agents import SystemAgent
+from src.utils import LogTracer
+from agents import add_trace_processor
 
 async def run(query: str):
-    async for chunk in MainAgent.run(query):
+    add_trace_processor(LogTracer())
+    sys_agent = SystemAgent("System", "gpt-4.1-mini")
+    async for chunk in sys_agent.run(query):
         yield chunk
-
 
 with gr.Blocks(theme=gr.themes.Default(primary_hue="sky")) as ui:
     gr.Markdown("## Agentic Pipelines Chat Interface")
