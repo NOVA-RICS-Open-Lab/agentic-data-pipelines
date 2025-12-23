@@ -1,21 +1,29 @@
 import gradio as gr
 from src.agents import SystemAgent
-from src.config import Config
-from src.mcp import MCPClient
 
 
 async def run(message, history):
-    async with MCPClient() as mcp:
-        tools = await mcp.list_tools()
-        agent = SystemAgent.create_agent(tools)
+    sys_agent = SystemAgent()
 
-        result = await Config.OPENAI_CLIENT.agents.run(
-            agent=agent,
-            input=message,
-            context=history,
-        )
+    if history is None:
+        history = []
 
-        return history + [(message, result.output_text)]
+    # Append user message
+    history = history + [{"role": "user", "content": message}]
+    yield history
+
+    assistant_text = ""
+
+    async for token in sys_agent.run_with_mcp_servers_streamed(message):
+        assistant_text += token
+
+        # Update assistant message
+        if len(history) == 0 or history[-1]["role"] != "assistant":
+            history.append({"role": "assistant", "content": assistant_text})
+        else:
+            history[-1]["content"] = assistant_text
+
+        yield history
 
 
 with gr.Blocks() as ui:

@@ -35,18 +35,8 @@ services:
     depends_on:
       - aasx-server
       - neo4j
-      - mcp-server
     ports:
       - "8000:8000"
-    networks:
-      - agentic-net
-
-  mcp-server:
-    container_name: mcp-server
-    build: ./mcp-server
-    restart: no
-    ports:
-      - "7001:7001"
     networks:
       - agentic-net
 

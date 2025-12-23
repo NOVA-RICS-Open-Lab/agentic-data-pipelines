@@ -7,10 +7,11 @@ class SearchAgent:
         self.name = name
         self.model_name = model_name
 
-    def create_agent(self, mcp_tools) -> Agent:
+    def create_agent(self, mcp_tools, tool_executor=None) -> Agent:
         return Config.OPENAI_CLIENT.agents.create(
             name="ResearchAgent",
             instructions=Templates.apex() + Templates.search_agent(),
             model="gpt-4.1-mini",
             tools=mcp_tools,
+            tool_executor=tool_executor,
         )
