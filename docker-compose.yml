@@ -32,6 +32,7 @@ services:
   agent-runtime:
     container_name: agent-runtime
     build: ./agent-runtime
+    restart: unless-stopped
     depends_on:
       - aasx-server
       - neo4j

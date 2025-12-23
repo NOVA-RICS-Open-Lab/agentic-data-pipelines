@@ -1,8 +1,9 @@
-from agents import Agent, Runner
+from agents import Agent, Runner, trace
 from src.config import Templates, Config
 from contextlib import AsyncExitStack
 from agents.mcp import MCPServerStdio
 from openai.types.responses import ResponseTextDeltaEvent
+from src.utils import make_trace_id
 
 
 class SystemAgent:
@@ -10,14 +11,12 @@ class SystemAgent:
 
     def __init__(self, name: str = "SystemAgent", model_name: str = "gpt-4.1-mini"):
         self.name = name
-        self.agent = None
+        self.agent: Agent | None = None
         self.model_name = model_name
+        self.history: list[dict] = []
+        self.mcp_servers = None  
 
     async def create_agent(self, mcp_servers) -> Agent:
-        #from src.agents import SearchAgent
-        #researcher_instance = SearchAgent(name="ResearchAgent", model_name="gpt-4.1-mini")
-        #researcher = researcher_instance.create_agent(mcp_servers=mcp_servers, tool_executor=tool_executor)
-
         self.agent = Agent(
             name=self.name,
             instructions=Templates.apex() + Templates.system_agent(),
@@ -26,26 +25,46 @@ class SystemAgent:
         )
         return self.agent
     
-    async def run_with_mcp_servers_streamed(self, prompt: str):
-        async with AsyncExitStack() as stack:
-            mcp_servers = [
-                await stack.enter_async_context(
-                    MCPServerStdio(params, client_session_timeout_seconds=120)
-                )
-                for params in Config.mcp_server_params_list
-            ]
+    async def init_mcp(self):
+        if self.mcp_servers is None:
+            async with AsyncExitStack() as stack:
+                self.mcp_servers = [
+                    await stack.enter_async_context(
+                        MCPServerStdio(params, client_session_timeout_seconds=120)
+                    )
+                    for params in Config.mcp_server_params_list
+                ]
+    
+    async def run(self, prompt: str):
+        trace_name = f"{self.name}-working"
+        trace_id = make_trace_id(f"{self.name.lower()}")
 
-            agent = await self.create_agent(mcp_servers)
+        # store user message
+        self.history.append({"role": "user", "content": prompt})
 
-            stream = Runner.run_streamed(
-                agent,
-                input=prompt,
-                max_turns=5,
+        with trace(trace_name, trace_id=trace_id):
+            await self.init_mcp()  # make sure MCP servers are ready
+            if self.agent is None:
+                self.agent = await self.create_agent(self.mcp_servers)
+
+            # prepare input including conversation history
+            conversation_input = "\n".join(
+                f'{msg["role"]}: {msg["content"]}' for msg in self.history
             )
 
+            stream = Runner.run_streamed(
+                self.agent,
+                input=conversation_input,
+                max_turns=Config.MAX_TURNS,
+            )
+
+            assistant_text = ""
             async for event in stream.stream_events():
-                if (
-                    event.type == "raw_response_event"
-                    and isinstance(event.data, ResponseTextDeltaEvent)
+                if event.type == "raw_response_event" and isinstance(
+                    event.data, ResponseTextDeltaEvent
                 ):
-                    yield event.data.delta
+                    assistant_text += event.data.delta
+                    yield event.data.delta  # streaming per token
+
+            # append assistant response to history
+            self.history.append({"role": "assistant", "content": assistant_text})

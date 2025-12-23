@@ -1088,3 +1088,85 @@
 2025-12-23 14:06:23.011+0000 INFO  Started.
 2025-12-23 14:40:31.732+0000 INFO  Neo4j Server shutdown initiated by request
 2025-12-23 14:40:31.744+0000 INFO  Stopping...
+2025-12-23 15:47:15.601+0000 INFO  Logging config in use: File '/var/lib/neo4j/conf/user-logs.xml'
+2025-12-23 15:47:15.630+0000 INFO  Starting...
+2025-12-23 15:47:16.839+0000 INFO  This instance is ServerId{ec443550} (ec443550-4a68-4cc6-b235-189e9ae8abde)
+2025-12-23 15:47:18.462+0000 INFO  ======== Neo4j 5.26.18 ========
+2025-12-23 15:47:24.048+0000 INFO  Anonymous Usage Data is being sent to Neo4j, see https://neo4j.com/docs/usage-data/
+2025-12-23 15:47:24.138+0000 INFO  Bolt enabled on 0.0.0.0:7687.
+2025-12-23 15:47:26.112+0000 INFO  HTTP enabled on 0.0.0.0:7474.
+2025-12-23 15:47:26.113+0000 INFO  Remote interface available at http://localhost:7474/
+2025-12-23 15:47:26.117+0000 INFO  id: 9F87E89A496C640F4BCF6814CC29A2C4896FB0FE292BAC74F89E9EE0B858FC67
+2025-12-23 15:47:26.118+0000 INFO  name: system
+2025-12-23 15:47:26.119+0000 INFO  creationDate: 2025-05-06T08:56:11.852Z
+2025-12-23 15:47:26.119+0000 INFO  Started.
+2025-12-23 15:49:14.508+0000 INFO  Neo4j Server shutdown initiated by request
+2025-12-23 15:49:14.511+0000 INFO  Stopping...
+2025-12-23 15:50:57.096+0000 INFO  Logging config in use: File '/var/lib/neo4j/conf/user-logs.xml'
+2025-12-23 15:50:57.122+0000 INFO  Starting...
+2025-12-23 15:50:58.029+0000 INFO  This instance is ServerId{ec443550} (ec443550-4a68-4cc6-b235-189e9ae8abde)
+2025-12-23 15:50:59.197+0000 INFO  ======== Neo4j 5.26.18 ========
+2025-12-23 15:51:07.402+0000 INFO  Anonymous Usage Data is being sent to Neo4j, see https://neo4j.com/docs/usage-data/
+2025-12-23 15:51:07.541+0000 INFO  Bolt enabled on 0.0.0.0:7687.
+2025-12-23 15:51:09.920+0000 INFO  HTTP enabled on 0.0.0.0:7474.
+2025-12-23 15:51:09.922+0000 INFO  Remote interface available at http://localhost:7474/
+2025-12-23 15:51:09.927+0000 INFO  id: 9F87E89A496C640F4BCF6814CC29A2C4896FB0FE292BAC74F89E9EE0B858FC67
+2025-12-23 15:51:09.928+0000 INFO  name: system
+2025-12-23 15:51:09.929+0000 INFO  creationDate: 2025-05-06T08:56:11.852Z
+2025-12-23 15:51:09.930+0000 INFO  Started.
+2025-12-23 15:56:30.180+0000 INFO  Neo4j Server shutdown initiated by request
+2025-12-23 15:56:30.182+0000 INFO  Stopping...
+2025-12-23 15:58:50.758+0000 INFO  Logging config in use: File '/var/lib/neo4j/conf/user-logs.xml'
+2025-12-23 15:58:50.778+0000 INFO  Starting...
+2025-12-23 15:58:51.884+0000 INFO  This instance is ServerId{ec443550} (ec443550-4a68-4cc6-b235-189e9ae8abde)
+2025-12-23 15:58:53.542+0000 INFO  ======== Neo4j 5.26.18 ========
+2025-12-23 15:59:00.576+0000 INFO  Anonymous Usage Data is being sent to Neo4j, see https://neo4j.com/docs/usage-data/
+2025-12-23 15:59:00.673+0000 INFO  Bolt enabled on 0.0.0.0:7687.
+2025-12-23 15:59:01.654+0000 INFO  HTTP enabled on 0.0.0.0:7474.
+2025-12-23 15:59:01.656+0000 INFO  Remote interface available at http://localhost:7474/
+2025-12-23 15:59:01.660+0000 INFO  id: 9F87E89A496C640F4BCF6814CC29A2C4896FB0FE292BAC74F89E9EE0B858FC67
+2025-12-23 15:59:01.662+0000 INFO  name: system
+2025-12-23 15:59:01.662+0000 INFO  creationDate: 2025-05-06T08:56:11.852Z
+2025-12-23 15:59:01.663+0000 INFO  Started.
+2025-12-23 16:07:25.099+0000 INFO  Neo4j Server shutdown initiated by request
+2025-12-23 16:07:25.100+0000 INFO  Stopping...
+2025-12-23 16:07:37.740+0000 INFO  Logging config in use: File '/var/lib/neo4j/conf/user-logs.xml'
+2025-12-23 16:07:37.767+0000 INFO  Starting...
+2025-12-23 16:07:39.050+0000 INFO  This instance is ServerId{ec443550} (ec443550-4a68-4cc6-b235-189e9ae8abde)
+2025-12-23 16:07:40.516+0000 INFO  ======== Neo4j 5.26.18 ========
+2025-12-23 16:07:45.473+0000 INFO  Anonymous Usage Data is being sent to Neo4j, see https://neo4j.com/docs/usage-data/
+2025-12-23 16:07:45.525+0000 INFO  Bolt enabled on 0.0.0.0:7687.
+2025-12-23 16:07:46.376+0000 INFO  HTTP enabled on 0.0.0.0:7474.
+2025-12-23 16:07:46.378+0000 INFO  Remote interface available at http://localhost:7474/
+2025-12-23 16:07:46.382+0000 INFO  id: 9F87E89A496C640F4BCF6814CC29A2C4896FB0FE292BAC74F89E9EE0B858FC67
+2025-12-23 16:07:46.383+0000 INFO  name: system
+2025-12-23 16:07:46.384+0000 INFO  creationDate: 2025-05-06T08:56:11.852Z
+2025-12-23 16:07:46.385+0000 INFO  Started.
+2025-12-23 16:18:14.126+0000 INFO  Neo4j Server shutdown initiated by request
+2025-12-23 16:18:14.127+0000 INFO  Stopping...
+2025-12-23 16:18:27.580+0000 INFO  Logging config in use: File '/var/lib/neo4j/conf/user-logs.xml'
+2025-12-23 16:18:27.603+0000 INFO  Starting...
+2025-12-23 16:18:29.231+0000 INFO  This instance is ServerId{ec443550} (ec443550-4a68-4cc6-b235-189e9ae8abde)
+2025-12-23 16:18:30.708+0000 INFO  ======== Neo4j 5.26.18 ========
+2025-12-23 16:18:35.043+0000 INFO  Anonymous Usage Data is being sent to Neo4j, see https://neo4j.com/docs/usage-data/
+2025-12-23 16:18:35.129+0000 INFO  Bolt enabled on 0.0.0.0:7687.
+2025-12-23 16:18:36.091+0000 INFO  HTTP enabled on 0.0.0.0:7474.
+2025-12-23 16:18:36.092+0000 INFO  Remote interface available at http://localhost:7474/
+2025-12-23 16:18:36.096+0000 INFO  id: 9F87E89A496C640F4BCF6814CC29A2C4896FB0FE292BAC74F89E9EE0B858FC67
+2025-12-23 16:18:36.097+0000 INFO  name: system
+2025-12-23 16:18:36.099+0000 INFO  creationDate: 2025-05-06T08:56:11.852Z
+2025-12-23 16:18:36.100+0000 INFO  Started.
+2025-12-23 16:22:56.312+0000 INFO  Neo4j Server shutdown initiated by request
+2025-12-23 16:22:56.314+0000 INFO  Stopping...
+2025-12-23 16:23:08.634+0000 INFO  Logging config in use: File '/var/lib/neo4j/conf/user-logs.xml'
+2025-12-23 16:23:08.668+0000 INFO  Starting...
+2025-12-23 16:23:09.856+0000 INFO  This instance is ServerId{ec443550} (ec443550-4a68-4cc6-b235-189e9ae8abde)
+2025-12-23 16:23:11.232+0000 INFO  ======== Neo4j 5.26.18 ========
+2025-12-23 16:23:15.283+0000 INFO  Anonymous Usage Data is being sent to Neo4j, see https://neo4j.com/docs/usage-data/
+2025-12-23 16:23:15.334+0000 INFO  Bolt enabled on 0.0.0.0:7687.
+2025-12-23 16:23:16.434+0000 INFO  HTTP enabled on 0.0.0.0:7474.
+2025-12-23 16:23:16.436+0000 INFO  Remote interface available at http://localhost:7474/
+2025-12-23 16:23:16.440+0000 INFO  id: 9F87E89A496C640F4BCF6814CC29A2C4896FB0FE292BAC74F89E9EE0B858FC67
+2025-12-23 16:23:16.442+0000 INFO  name: system
+2025-12-23 16:23:16.442+0000 INFO  creationDate: 2025-05-06T08:56:11.852Z
+2025-12-23 16:23:16.443+0000 INFO  Started.

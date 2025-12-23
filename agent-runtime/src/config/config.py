@@ -20,9 +20,9 @@ class Config:
     ]
 
     mcp_server_params_list = [
-        
-    ]
 
+    ]
+    MAX_TURNS = 10
     def get_model(model_name: str):
         if "gpt" in model_name:
             return OpenAIChatCompletionsModel(model=model_name, openai_client=Config.OPENAI_CLIENT)
