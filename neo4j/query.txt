@@ -1,0 +1,17 @@
+CREATE (le:Protocol {name: "OPC-UA"}),
+  (db:Protocol {name: "ModBus" }),
+  (de:Protocol {name: "HTTP" }),
+  (dg:Protocol {name: "MQTT" })
+
+
+
+
+CREATE (:Constraints {name: "Cleansing", concept: "PreProcessing"}),
+(:Constraints {name: "Normalize", concept: "PreProcessing"}),
+(:Constraints {name: "Imputation", concept: "PreProcessing"}),
+(:Constraints {name: "Transformation", concept: "PreProcessing"}),
+(:Constraints {name: "Batch", concept: "Processing"}),
+(:Constraints {name: "Streaming", concept: "Processing"}),
+(:Constraints {name: "Structured", concept: "Storage"}),
+(:Constraints {name: "Unstructured", concept: "Storage"}),
+(:Constraints {name: "Middleware", concept: "Extraction"})
