@@ -1,16 +1,13 @@
 import gradio as gr
-import json
 from src.agents import SystemAgent
+import logging
+import sys
+
+logging.basicConfig(level=logging.DEBUG, handlers=[
+    logging.StreamHandler(sys.stderr)
+])
 
 system = SystemAgent()
-
-try:
-    with open("memory.json") as f:
-        system.history = json.load(f)
-
-except FileNotFoundError:
-    system.history = []
-
 
 async def run(message, history):
     if history is None:
@@ -26,17 +23,14 @@ async def run(message, history):
         else:
             history[-1]["content"] = assistant_text
 
-        yield history
-    
-    with open("memory.json", "w") as f:
-        json.dump(system.history, f)
+        yield history, ""
 
 
 with gr.Blocks() as ui:
     gr.Markdown("## Agentic Pipelines Chat Interface")
     chat = gr.Chatbot()
     msg = gr.Textbox()
-    msg.submit(run, [msg, chat], chat)
+    msg.submit(run, [msg, chat], [chat, msg])
 
 
 ui.launch(

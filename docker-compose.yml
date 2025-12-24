@@ -38,8 +38,6 @@ services:
       - neo4j
     ports:
       - "8000:8000"
-    volumes:
-      - ./agent-runtime:/app
     networks:
       - agentic-net
 

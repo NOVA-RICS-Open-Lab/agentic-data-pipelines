@@ -11,17 +11,17 @@ class Config:
     NEO4J_USER=os.getenv("NEO4J_USER")
     NEO4J_PASSWORD=os.getenv("NEO4J_PASSWORD")
     OPENAI_API_KEY=os.getenv("OPENAI_API_KEY")
-    MCP_URL=os.getenv("MCP_URL")
 
     OPENAI_CLIENT=AsyncOpenAI(api_key=OPENAI_API_KEY)
 
-    servers = [
-        "src/mcp/server.py"
-    ]
-
     mcp_server_params_list = [
-
+        {
+            "command": "python",
+            "args": ["-m", "src.mcp.aasx.aasx_server"],
+            "env": {**os.environ, "PYTHONPATH": "/app"},
+        }
     ]
+
     MAX_TURNS = 10
     def get_model(model_name: str):
         if "gpt" in model_name:

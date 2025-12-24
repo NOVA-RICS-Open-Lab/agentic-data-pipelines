@@ -14,12 +14,13 @@ class SystemAgent:
         self.agent: Agent | None = None
         self.model_name = model_name
         self.history: list[dict] = []
-        self.mcp_servers = None  
+        self.mcp_stack = AsyncExitStack()
+        self.mcp_servers = None
 
     async def create_agent(self, mcp_servers) -> Agent:
         self.agent = Agent(
             name=self.name,
-            instructions=Templates.apex() + Templates.system_agent(),
+            instructions=Templates.system_agent(),
             model=Config.get_model(self.model_name),
             mcp_servers=mcp_servers,
         )
@@ -27,13 +28,13 @@ class SystemAgent:
     
     async def init_mcp(self):
         if self.mcp_servers is None:
-            async with AsyncExitStack() as stack:
-                self.mcp_servers = [
-                    await stack.enter_async_context(
-                        MCPServerStdio(params, client_session_timeout_seconds=120)
-                    )
-                    for params in Config.mcp_server_params_list
-                ]
+            await self.mcp_stack.__aenter__()
+            self.mcp_servers = [
+                await self.mcp_stack.enter_async_context(
+                    MCPServerStdio(params, client_session_timeout_seconds=120)
+                )
+                for params in Config.mcp_server_params_list
+            ]
     
     async def run(self, prompt: str):
         trace_name = f"{self.name}-working"
@@ -43,7 +44,7 @@ class SystemAgent:
         self.history.append({"role": "user", "content": prompt})
 
         with trace(trace_name, trace_id=trace_id):
-            await self.init_mcp()  # make sure MCP servers are ready
+            await self.init_mcp()
             if self.agent is None:
                 self.agent = await self.create_agent(self.mcp_servers)
 

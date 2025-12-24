@@ -7,6 +7,8 @@ RUN pip install --no-cache-dir .
 
 COPY src ./src
 
+ENV PYTHONPATH=/app
+
 EXPOSE 8000
 
 CMD ["python", "-m", "src.main"]
