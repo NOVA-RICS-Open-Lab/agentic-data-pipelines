@@ -1,9 +1,12 @@
 from agents import Agent, Runner, trace
 from src.config import Templates, Config
 from contextlib import AsyncExitStack
-from agents.mcp import MCPServerStdio
+from agents.mcp import MCPServerStdio, MCPServerSse, MCPServerStreamableHttp
 from openai.types.responses import ResponseTextDeltaEvent
 from src.utils import make_trace_id
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SystemAgent:
@@ -29,13 +32,36 @@ class SystemAgent:
     async def init_mcp(self):
         if self.mcp_servers is None:
             await self.mcp_stack.__aenter__()
-            self.mcp_servers = [
-                await self.mcp_stack.enter_async_context(
-                    MCPServerStdio(params, client_session_timeout_seconds=120)
-                )
-                for params in Config.mcp_server_params_list
-            ]
-    
+            self.mcp_servers = []
+            for params in Config.mcp_server_params_list:
+                if "url" in params:
+                    logger.info(f"Connecting to HHTP MCP server at {params['url']}")
+                    server = await self.mcp_stack.enter_async_context(
+                        MCPServerStreamableHttp(
+                            params={"url": params["url"],
+                                    },
+                            client_session_timeout_seconds=120
+                        )
+                    )
+                    logger.info(f"Successfully connected to HTTP server at {params['url']}")
+                else:
+                    logger.info(f"Connecting to STDIO MCP server: {params['command']}")
+                    server = await self.mcp_stack.enter_async_context(
+                        MCPServerStdio(
+                            params={
+                                "command": params["command"],
+                                "args": params.get("args", []),
+                                "env": params.get("env", {}),
+                            },
+                            client_session_timeout_seconds=120
+                        )
+                    )
+                    logger.info(f"Successfully connected to STDIO server")
+
+                self.mcp_servers.append(server)
+
+
+
     async def run(self, prompt: str):
         trace_name = f"{self.name}-working"
         trace_id = make_trace_id(f"{self.name.lower()}")

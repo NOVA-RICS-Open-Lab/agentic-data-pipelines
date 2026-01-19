@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "aasx_server": {
+      "command": "python",
+      "args": [
+        "src/mcp/aasx/aasx_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "."
+      }
+    }
+  }
+}

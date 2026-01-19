@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "aasx_server_http": {
+        "transport": "Streamable HTTP",
+        "url": "http://localhost:8080/mcp"
+        }
+    }
+}

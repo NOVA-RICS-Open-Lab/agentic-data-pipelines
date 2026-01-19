@@ -40,6 +40,26 @@ services:
       - "8000:8000"
     networks:
       - agentic-net
+    env_file:
+      - .env
+  aasx-mcp-service:
+    profiles: ["http"]  # Only starts if you run: docker compose --profile http up
+    build: ./agent-runtime
+    container_name: aasx-mcp-service
+    command: python -m src.mcp.aasx.aasx_server
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - MCP_CONNECTION_MODE=http
+      - PORT=8080
+      - AAS_BASE_URL=http://aasx-server:5001
+    depends_on:
+      - aasx-server
+    networks:
+      - agentic-net
+    
 
 networks:
   agentic-net:

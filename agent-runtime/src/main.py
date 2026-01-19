@@ -1,5 +1,5 @@
 import gradio as gr
-from src.agents import SystemAgent
+from src.agents import SystemAgent # type: ignore
 import logging
 import sys
 
@@ -36,5 +36,5 @@ with gr.Blocks() as ui:
 ui.launch(
     server_name="0.0.0.0",
     server_port=8000,
-    theme=gr.themes.Default(primary_hue="sky"),
+    theme=gr.themes.Default(primary_hue="sky"), # type: ignore
 )
