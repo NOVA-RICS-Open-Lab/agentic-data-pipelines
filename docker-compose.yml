@@ -1,7 +1,7 @@
 services:
   aasx-server:
     container_name: aasx-server
-    image: docker.io/adminshellio/aasx-server-blazor-for-demo:0.3.1.284-aasv3-alpha-latest
+    image: docker.io/adminshellio/aasx-server-blazor-for-demo:0.3.1.284-aasv3-alpha-latest 
     restart: unless-stopped
     ports:
       - "5001:5001"
@@ -9,7 +9,7 @@ services:
       - Kestrel__Endpoints__Http__Url=http://*:5001
     volumes:
       - ./aasxs:/AasxServerBlazor/aasxs
-    command: --no-security --external-blazor http://localhost:5001
+    command: --no-security --rest --external-blazor http://localhost:5001
     networks:
       - agentic-net
 

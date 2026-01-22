@@ -38,7 +38,7 @@ class SystemAgent:
                     logger.info(f"Connecting to HHTP MCP server at {params['url']}")
                     server = await self.mcp_stack.enter_async_context(
                         MCPServerStreamableHttp(
-                            params={"url": params["url"],
+                            params={"url": params["url"],  
                                     },
                             client_session_timeout_seconds=120
                         )
