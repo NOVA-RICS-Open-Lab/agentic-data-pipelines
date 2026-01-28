@@ -9,6 +9,15 @@ logging.basicConfig(level=logging.DEBUG, handlers=[
 
 system = SystemAgent()
 
+async def initialize_the_SystemAgent():
+    await system.initialize()
+
+    ## No futuro dar load da memoria seria aqui acho eu
+    
+    return "Ready"
+
+
+
 async def run(message, history):
     if history is None:
         history = []
@@ -28,9 +37,11 @@ async def run(message, history):
 
 with gr.Blocks() as ui:
     gr.Markdown("## Agentic Pipelines Chat Interface")
+    status = gr.Markdown('Initializing')
     chat = gr.Chatbot()
     msg = gr.Textbox()
     msg.submit(run, [msg, chat], [chat, msg])
+    ui.load(fn=initialize_the_SystemAgent, inputs=None, outputs=status)
 
 
 ui.launch(

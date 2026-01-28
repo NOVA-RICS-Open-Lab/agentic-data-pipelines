@@ -1,10 +1,11 @@
 [project]
 name = "agentic-pipelines"
-version = "0.1.0"
+version = "0.1.1"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "agent-squad[all]>=1.0.2",
     "anthropic>=0.49.0",
     "autogen-agentchat>=0.4.9.2",
     "autogen-ext[grpc,mcp,ollama,openai]>=0.4.9.2",

@@ -19,6 +19,7 @@ class SystemAgent:
         self.history: list[dict] = []
         self.mcp_stack = AsyncExitStack()
         self.mcp_servers = None
+        self.initialized = False
 
     async def create_agent(self, mcp_servers) -> Agent:
         self.agent = Agent(
@@ -28,6 +29,34 @@ class SystemAgent:
             mcp_servers=mcp_servers,
         )
         return self.agent
+    
+    async def initialize(self):
+        if self.initialized:
+            logger.info("Agent already initialized")
+            return
+        
+        logger.info(f"Initializing {self.name}...")
+        
+        await self.init_mcp()
+        
+        # Create the agent
+        if self.agent is None:
+            self.agent = await self.create_agent(self.mcp_servers)
+        
+        logger.info("Running warm-up prompt...")
+        warmup_stream = Runner.run_streamed(
+            self.agent,
+            input="Respond with 'ready' if you can hear me.",
+            max_turns=1,
+        )
+        
+        async for event in warmup_stream.stream_events():
+            pass  
+        
+        logger.info("Warm-up complete")
+
+        self.initialized = True
+        logger.info(f"{self.name} initialization complete")
     
     async def init_mcp(self):
         if self.mcp_servers is None:
