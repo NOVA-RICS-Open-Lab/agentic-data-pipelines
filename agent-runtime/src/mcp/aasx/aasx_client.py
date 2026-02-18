@@ -35,13 +35,22 @@ class AASClient:
         shell_enc = AASClient.aas_id_encode(shell_id)
         return AASClient._get_json(f"{Config.AAS_BASE_URL}/shells/{shell_enc}")
     
-
+    @staticmethod
+    def get_submodels_refs(shell_id: str) -> dict:
+        shell_enc = AASClient.aas_id_encode(shell_id)
+        return AASClient._get_json(f"{Config.AAS_BASE_URL}/shells/{shell_enc}/submodel-refs")
 
     @staticmethod
     def get_submodel(shell_id: str, submodel_id: str) -> dict:
         shell_enc = AASClient.aas_id_encode(shell_id)
         submodel_enc = AASClient.aas_id_encode(submodel_id)
         url = f"{Config.AAS_BASE_URL}/shells/{shell_enc}/submodels/{submodel_enc}"
+        return AASClient._get_json(url)
+    
+    @staticmethod
+    def get_submodel_standalone(submodel_id: str) -> dict:
+        submodel_enc = AASClient.aas_id_encode(submodel_id)
+        url = f"{Config.AAS_BASE_URL}/submodels/{submodel_enc}"
         return AASClient._get_json(url)
     
     ##To make changes to the AAS
@@ -60,7 +69,7 @@ class AASClient:
         return resp.json()
 
     @staticmethod
-    def _patch_json(url: str, json_data: any) -> dict:
+    def _patch_json(url: str, json_data: dict) -> dict:
         """PATCH helper"""
         headers = {
             "Accept": "application/json, application/ld+json; q=0.9",
@@ -73,7 +82,29 @@ class AASClient:
         return resp.json()
     
     @staticmethod
+    def _delete_json(url: str, json_data: dict = None) -> dict:
+        """DELETE helper with optional request body."""
+        headers = {"Accept": "application/json"}
+        if json_data is not None:
+            headers["Content-Type"] = "application/json"
+        resp = requests.delete(url, json=json_data, headers=headers, timeout=10)
+        resp.raise_for_status()
+        
+        if "application/json" not in resp.headers.get("Content-Type", ""):
+            raise RuntimeError(f"Non-JSON response: {resp.text[:500]}")
+        return resp.json()
+    
+    @staticmethod
     def create_submodel(submodel: dict) -> dict:
+        """
+        Create a new standalone submodel. 
+        REQUIRED in submodel dict:
+        - id: Full IRI (e.g. 'https://example.com/ids/sm/1234_5678_9012_3456')
+        - idShort: string name
+        - modelType: "Submodel"
+        - kind: "Instance"
+        - submodelElements: list of element dicts
+        """
         url = f"{Config.AAS_BASE_URL}/submodels"
         return AASClient._post_json(url, submodel)
     
@@ -90,11 +121,23 @@ class AASClient:
         return AASClient._post_json(url, element)
 
     @staticmethod
-    def update_submodel_element_value(shell_id: str, submodel_id: str, id_short_path: str, value: any) -> dict:
+    def update_submodel_element_value(shell_id: str, submodel_id: str, id_short_path: str, element: dict) -> dict:
+        """
+        Update a submodel element.
+        
+        Args:
+            shell_id: Full shell IRI (e.g., "https://example.com/ids/sm/0352_1113_7042_6202")
+            submodel_id: Full submodel IRI (e.g., "https://example.com/ids/sm/0042_1113_7042_5276")
+            id_short_path: Dot-separated path to element (e.g., "HMI.Manufacturer")
+            element: Complete element JSON including modelType, idShort, valueType, value or others
+        
+        Returns:
+            Updated element JSON
+        """
         shell_enc = AASClient.aas_id_encode(shell_id)
         submodel_enc = AASClient.aas_id_encode(submodel_id)
-        url = f"{Config.AAS_BASE_URL}/shells/{shell_enc}/submodels/{submodel_enc}/submodel-elements/{id_short_path}/$value"
-        return AASClient._patch_json(url, value)
+        url = f"{Config.AAS_BASE_URL}/shells/{shell_enc}/submodels/{submodel_enc}/submodel-elements/{id_short_path}"
+        return AASClient._patch_json(url, element)
 
     @staticmethod
     def delete_submodel_element(shell_id: str, submodel_id: str, id_short_path: str) -> dict:
@@ -106,3 +149,26 @@ class AASClient:
         if "application/json" not in resp.headers.get("Content-Type", ""):
             raise RuntimeError(f"Non-JSON response: {resp.text[:500]}")
         return resp.json()
+    
+    @staticmethod 
+    def create_shell(shell_payload: dict) -> dict:
+        """
+        Creates a new AAS Shell on the server.
+        
+        Args:
+            shell_payload: The complete JSON dictionary for the AAS Shell.
+        """
+        url = f"{Config.AAS_BASE_URL}/shells"
+        return AASClient._post_json(url, shell_payload)
+    
+    @staticmethod
+    def delete_shell(shell_id: str) -> dict:
+        """
+        Deletes a specific AAS Shell by its identifier.
+        
+        Args:
+            shell_id: Full shell IRI (e.g., "https://example.com/ids/aas/1234")
+        """
+        shell_encoded = AASClient.aas_id_encode(shell_id)
+        url = f"{Config.AAS_BASE_URL}/shells/{shell_encoded}"
+        return AASClient._delete_json(url)
