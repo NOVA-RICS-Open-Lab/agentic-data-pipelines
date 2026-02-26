@@ -4,7 +4,12 @@ from openai import AsyncOpenAI
 from agents import OpenAIChatCompletionsModel
 from mcp.server.fastmcp import FastMCP
 
+
+
+
 load_dotenv(override=True)
+
+
 
 class Config:
     AAS_BASE_URL=os.getenv("AAS_BASE_URL")
@@ -15,6 +20,10 @@ class Config:
     MCP_MODE = os.getenv("MCP_CONNECTION_MODE", "stdio").lower()
     MCP_HTTP_URL = os.getenv("MCP_HTTP_URL", "http://aasx-mcp-service:8080/mcp")
 
+    # AASX folder paths
+    AASX_SOURCE_DIR = os.getenv("AASX_SOURCE_DIR", "/AasxServerBlazor/aasxs")
+    AASX_AGENT_DIR  = os.getenv("AASX_AGENT_DIR",  "/app/aasxs")
+    
     OPENAI_CLIENT=AsyncOpenAI(api_key=OPENAI_API_KEY)
 
     mcp_server_params_list = []
