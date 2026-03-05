@@ -4,6 +4,8 @@ import sys
 import os
 import logging
 import random
+import subprocess
+import sys
 
 from mcp.server.transport_security import TransportSecuritySettings
 
@@ -20,19 +22,73 @@ aasx_mcp = FastMCP("aasx_server",
                         All new submodel IDs must follow the pattern: https://example.com/ids/sm/XXXX_XXXX_XXXX_XXXX 
                         where X is a random digit. 
 
+                        SUBMODEL CREATION RULE:
+                        When creating a new submodel, ALWAYS first fetch an existing submodel from the server 
+                        using get_submodel_standalone to use as a structural reference.
+                        Copy the structure exactly, replace only id (generate a new one), idShort, and element values.
+                        Never guess the schema from scratch.
+
+                        SUBMODEL ID RULE:
+                        The 'id' field is MANDATORY at the root of every submodel JSON before calling create_submodel.
+                        Never call create_submodel without 'id' present at the root level.
+                        A missing 'id' will cause a 409 or 400 error.
+
                         CLONING RULE:
-                        When creating submodels based on a template, ALWAYS replace the 'id' field 
-                        with a freshly generated ID from generate_aas_numeric_id(is_submodel=True).
-                        Never POST a submodel using an ID that already exists on the server — 
-                        this causes a 409 Conflict. Generate the ID first, then inject it into 
-                        the submodel JSON before calling create_submodel.
-                        Remove the 'semanticId' filed entirely from the root level before posting
-                        — BaSyx may reject with 409 if semanticId conflicts with an existing submodel
+                        When cloning a submodel from a template:
+                        1. Call generate_aas_numeric_id(is_submodel=True) FIRST — before building any JSON
+                        2. Store that returned ID
+                        3. Use ONLY that returned ID in the 'id' field of the new submodel payload
+                        4. NEVER copy the 'id' field from the template submodel — that ID already exists and will cause 409 Conflict
+                        5. NEVER use an ID you did not receive from generate_aas_numeric_id in this session
+                        6. Remove 'semanticId' from the root level before posting
+
+                        409 AUTONOMOUS RECOVERY RULE:
+                        If create_submodel returns 409:
+                        1. Delete 'semanticId' from the root of the submodel JSON
+                        2. Retry create_submodel immediately with the same ID
+                        3. If it still returns 409, generate a brand new ID and retry once more
+                        4. Never stop and ask the user what to do on a 409 — always recover autonomously
+
+                        ORDER RULE:
+                        Always create_submodel BEFORE link_submodel.
+                        Never call link_submodel until create_submodel returns a successful response.
+                        A 409 on link_submodel is acceptable (already linked). A 409 on create_submodel means stop and generate a new ID.
+
+                        SAVING RULE:
+                        After ANY operation that creates, updates, or deletes a shell or submodel,
+                        ALWAYS call save_aas_changes() as the final step.
+                        Never finish a task that modifies the AAS without saving.
                         
                         JSON VALIDATION:
                         BaSyx V3 requires 'id' and 'idShort' at the root. 
                         Do not wrap 'id' inside an 'identification' object.
                         Always include 'modelType': 'Submodel' and 'kind': 'Instance'.
+
+
+                        SUBMODEL JSON STRUCTURE RULE:
+                        A valid BaSyx V3 submodel MUST follow this exact structure. Never deviate from it:
+
+                        {
+                        "id": "https://example.com/ids/sm/XXXX_XXXX_XXXX_XXXX",
+                        "idShort": "MySubmodel",
+                        "modelType": "Submodel",
+                        "kind": "Instance",
+                        "submodelElements": [
+                            {
+                            "idShort": "MyProperty",
+                            "modelType": "Property",
+                            "valueType": "xs:string",
+                            "value": "my_value"
+                            }
+                        ]
+                        }
+
+                        RULES:
+                        - valueType MUST be "xs:string", "xs:int", "xs:boolean", "xs:float" — never plain "string" or "integer"
+                        - Never wrap the payload in any outer key like "submodel": {...}
+                        - Never include "idType", "identification", or any AAS V2 fields
+                        - Never include "semanticId" at the root level
+                        - submodelElements is a flat list — each element needs idShort, modelType, valueType, value
                         """
                         )
 
@@ -66,8 +122,9 @@ def enrich_one_shell_submodels(shell_id: str) -> dict:
 
 
 @aasx_mcp.tool()
-async def describe_system() -> dict:
-    return [enrich_shell(shell) for shell in AASClient.list_shells()] # type: ignore
+async def describe_system() -> list[dict]:
+    """Lists all shells by name and ID only. Use describe_one_shell to get full details."""
+    return AASClient.list_shells()
 
 
 ##To Make future changes in the AAS
@@ -153,6 +210,66 @@ async def create_shell(shell_payload: dict) -> dict:
     Do NOT include 'submodels_content' - that is a local enrichment field only.
     """
     return AASClient.create_shell(shell_payload)
+
+@aasx_mcp.tool()
+async def update_shell(shell_id: str, shell_payload: dict) -> dict:
+    """Update an existing shell by its full IRI."""
+    return AASClient.update_shell(shell_id, shell_payload)
+
+@aasx_mcp.tool()
+async def delete_shell(shell_id: str) -> dict:
+    """Delete a shell by its full IRI."""
+    return AASClient.delete_shell(shell_id)
+
+@aasx_mcp.tool()
+async def get_submodel_element(submodel_id: str) -> dict:
+    """Get all elements of a submodel by its full IRI."""
+    return AASClient.get_submodel_element(submodel_id)
+
+@aasx_mcp.tool()
+async def get_submodel_element_value(submodel_id: str, id_short_path: str) -> dict:
+    """Get the raw $value of a specific submodel element."""
+    return AASClient.get_submodel_element_value(submodel_id, id_short_path)
+
+@aasx_mcp.tool()
+async def update_submodel_element(submodel_id: str, id_short_path: str, element: dict) -> dict:
+    """Full PUT replacement of a submodel element."""
+    return AASClient.update_submodel_element(submodel_id, id_short_path, element)
+
+@aasx_mcp.tool()
+async def delete_submodel(submodel_id: str) -> dict:
+    """Delete a standalone submodel by its full IRI."""
+    return AASClient.delete_submodel(submodel_id)
+
+@aasx_mcp.tool()
+async def delete_submodel_element(submodel_id: str, id_short_path: str) -> dict:
+    """Delete a submodel element by its idShort path."""
+    return AASClient.delete_submodel_element(submodel_id, id_short_path)
+
+@aasx_mcp.tool()
+async def delete_submodel_ref_to_shell(shell_id: str, submodel_id: str) -> dict:
+    """Unlink a submodel from a shell without deleting the submodel itself."""
+    return AASClient.delete_submodel_ref_to_shell(shell_id, submodel_id)
+
+
+@aasx_mcp.tool()
+async def save_aas_changes() -> str:
+    """
+    Saves the current state of all AAS shells to the persistent aasxs_agent/ folder.
+    Call this after creating, updating, or deleting any shell or submodel.
+    """
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "src.mcp.aasx.save_aasx_changes"],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        if result.returncode != 0:
+            return f"Save failed:\n{result.stderr}"
+        return f"Save successful:\n{result.stdout}"
+    except Exception as e:
+        return f"Save error: {e}"
 
 if __name__ == "__main__":  
     mode = os.getenv("MCP_CONNECTION_MODE", "stdio").lower()

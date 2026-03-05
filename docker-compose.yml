@@ -1,15 +1,15 @@
 services:
   aasx-server:
     container_name: aasx-server
-    image: docker.io/adminshellio/aasx-server-blazor-for-demo:0.3.1.284-aasv3-alpha-latest 
+    image:  docker.io/adminshellio/aasx-server-blazor-for-demo:0.3.1.284-aasv3-alpha-latest 
     restart: unless-stopped
     ports:
       - "5001:5001"
     environment:
       - Kestrel__Endpoints__Http__Url=http://*:5001
     volumes:
-      - ./aasxs:/AasxServerBlazor/aasxs
-    command: --no-security --rest --external-blazor http://localhost:5001
+      - ./aasxs:/AasxServerBlazor/aasxs  ## ./aasxs_agent:/AasxServerBlazor/aasxs_agent - ./aasxs:/AasxServerBlazor/aasxs NOTA: Se o folder(aasxs_agent) estiver vazio é preciso correr o codigo com aasx no final e depois  
+    command: --no-security --rest --external-blazor http://localhost:5001 -with-db --edit 
     networks:
       - agentic-net
 
@@ -42,11 +42,13 @@ services:
       - agentic-net
     env_file:
       - .env
+    volumes:
+      - ./aasxs:/app/aasxs
   aasx-mcp-service:
-    profiles: ["http"]  # Only starts if you run: docker compose --profile http up
+    profiles: ["http"]
     build: ./agent-runtime
     container_name: aasx-mcp-service
-    command: python -m src.mcp.aasx.aasx_server
+    command: python -m src.mcp.aasx.aasx_server 
     ports:
       - "8080:8080"
     env_file:
@@ -59,7 +61,7 @@ services:
       - aasx-server
     networks:
       - agentic-net
-    
+
 
 networks:
   agentic-net:

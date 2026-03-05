@@ -140,7 +140,7 @@ def safe_filename(name: str) -> str:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Persistently sync BaSyx V3 shells into aasxs_agent/ without ever deleting files."
+        description="Persistently sync BaSyx V3 shells into aasxs/ without ever deleting files."
     )
     parser.add_argument("--url",    default=Config.AAS_BASE_URL)
     parser.add_argument("--source", default=Config.AASX_SOURCE_DIR)

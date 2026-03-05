@@ -80,7 +80,20 @@ class AASClient:
         if "application/json" not in resp.headers.get("Content-Type", ""):
             raise RuntimeError(f"Non-JSON response: {resp.text[:500]}")
         return resp.json()
+    @staticmethod
+    def _put_json(url: str, json_data: dict) -> dict:
+        """PUT helper for full replacement."""
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+        resp = requests.put(url, json=json_data, headers=headers, timeout=10)
+        resp.raise_for_status()
+        if "application/json" not in resp.headers.get("Content-Type", ""):
+            raise RuntimeError(f"Non-JSON response: {resp.text[:500]}")
+        return resp.json()
     
+
     @staticmethod
     def _delete_json(url: str, json_data: dict = None) -> dict:
         """DELETE helper with optional request body."""
@@ -107,6 +120,8 @@ class AASClient:
         """
         url = f"{Config.AAS_BASE_URL}/submodels"
         return AASClient._post_json(url, submodel)
+
+
     
     @staticmethod 
     def link_submodel_to_shell(shell_id: str, submodel_reference: dict) -> dict:
@@ -139,16 +154,6 @@ class AASClient:
         url = f"{Config.AAS_BASE_URL}/shells/{shell_enc}/submodels/{submodel_enc}/submodel-elements/{id_short_path}"
         return AASClient._patch_json(url, element)
 
-    @staticmethod
-    def delete_submodel_element(shell_id: str, submodel_id: str, id_short_path: str) -> dict:
-        shell_enc = AASClient.aas_id_encode(shell_id)
-        submodel_enc = AASClient.aas_id_encode(submodel_id)
-        url = f"{Config.AAS_BASE_URL}/shells/{shell_enc}/submodels/{submodel_enc}/submodel-elements/{id_short_path}"
-        resp = requests.delete(url, headers={"Accept": "application/json"}, timeout=10)
-        resp.raise_for_status()
-        if "application/json" not in resp.headers.get("Content-Type", ""):
-            raise RuntimeError(f"Non-JSON response: {resp.text[:500]}")
-        return resp.json()
     
     @staticmethod 
     def create_shell(shell_payload: dict) -> dict:
@@ -171,4 +176,57 @@ class AASClient:
         """
         shell_encoded = AASClient.aas_id_encode(shell_id)
         url = f"{Config.AAS_BASE_URL}/shells/{shell_encoded}"
+        return AASClient._delete_json(url)
+
+
+    @staticmethod
+    def update_shell(shell_id: str, shell_payload: dict) -> dict:
+        """Updates an existing Shell on the AAS server by its ID.
+
+
+        Args:
+            shell_id: The unique identifier of the Shell.
+            shell_payload: A dictionary representing the updated Shell content.
+            
+        """
+
+        shell_encoded = AASClient.aas_id_encode(shell_id)
+        url = f"{Config.AAS_BASE_URL}/shells/{shell_encoded}"
+        return AASClient._patch_json(url, shell_payload)
+    
+    @staticmethod
+    def get_submodel_element(submodel_id: str) -> dict:
+        submodel_enc = AASClient.aas_id_encode(submodel_id)
+        url = f"{Config.AAS_BASE_URL}/submodels/{submodel_enc}/submodel-elements"
+        return AASClient._get_json(url)
+    
+    @staticmethod
+    def get_submodel_element_value(submodel_id: str, id_short_path: str) -> dict:
+        submodel_enc = AASClient.aas_id_encode(submodel_id)
+        url = f"{Config.AAS_BASE_URL}/submodels/{submodel_enc}/submodel-elements/{id_short_path}/$value"
+        return AASClient._get_json(url)
+    
+    @staticmethod
+    def update_submodel_element(submodel_id: str, id_short_path: str, element: dict) -> dict:
+        submodel_enc = AASClient.aas_id_encode(submodel_id)
+        url = f"{Config.AAS_BASE_URL}/submodels/{submodel_enc}/submodel-elements/{id_short_path}"
+        return AASClient._put_json(url, element)
+    
+    @staticmethod
+    def delete_submodel(submodel_id: str) -> dict:
+        submodel_enc = AASClient.aas_id_encode(submodel_id)
+        url = f"{Config.AAS_BASE_URL}/submodels/{submodel_enc}"
+        return AASClient._delete_json(url)
+    
+    @staticmethod
+    def delete_submodel_element(submodel_id: str, id_short_path: str) -> dict:
+        submodel_enc = AASClient.aas_id_encode(submodel_id)
+        url = f"{Config.AAS_BASE_URL}/submodels/{submodel_enc}/submodel-elements/{id_short_path}"
+        return AASClient._delete_json(url)
+    
+    @staticmethod
+    def delete_submodel_ref_to_shell(shell_id: str, submodel_id: str) -> dict:
+        shell_encoded = AASClient.aas_id_encode(shell_id)
+        submodel_enc = AASClient.aas_id_encode(submodel_id)
+        url = f"{Config.AAS_BASE_URL}/shells/{shell_encoded}/submodel-refs/{submodel_enc}" 
         return AASClient._delete_json(url)
