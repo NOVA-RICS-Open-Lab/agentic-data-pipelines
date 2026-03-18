@@ -70,16 +70,22 @@ class AASClient:
 
     @staticmethod
     def _patch_json(url: str, json_data: dict) -> dict:
-        """PATCH helper"""
+        """PATCH helper.
+        Returns empty dict on 204 No Content (BaSyx returns 204 on successful PATCH)."""
         headers = {
             "Accept": "application/json, application/ld+json; q=0.9",
             "Content-Type": "application/json"
         }
         resp = requests.patch(url, json=json_data, headers=headers, timeout=10)
         resp.raise_for_status()
+ 
+        if resp.status_code == 204 or not resp.content:
+            return {"status": "updated", "statusCode": resp.status_code}
+ 
         if "application/json" not in resp.headers.get("Content-Type", ""):
             raise RuntimeError(f"Non-JSON response: {resp.text[:500]}")
         return resp.json()
+    
     @staticmethod
     def _put_json(url: str, json_data: dict) -> dict:
         """PUT helper for full replacement."""
@@ -96,13 +102,17 @@ class AASClient:
 
     @staticmethod
     def _delete_json(url: str, json_data: dict = None) -> dict:
-        """DELETE helper with optional request body."""
+        """DELETE helper with optional request body.
+        Returns empty dict on 204 No Content (success with no body)."""
         headers = {"Accept": "application/json"}
         if json_data is not None:
             headers["Content-Type"] = "application/json"
         resp = requests.delete(url, json=json_data, headers=headers, timeout=10)
         resp.raise_for_status()
-        
+ 
+        if resp.status_code == 204 or not resp.content:
+            return {"status": "deleted", "statusCode": resp.status_code}
+ 
         if "application/json" not in resp.headers.get("Content-Type", ""):
             raise RuntimeError(f"Non-JSON response: {resp.text[:500]}")
         return resp.json()

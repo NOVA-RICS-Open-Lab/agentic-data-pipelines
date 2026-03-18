@@ -6,7 +6,7 @@ import logging
 import random
 import subprocess
 import sys
-
+from src.config.config import Config
 from mcp.server.transport_security import TransportSecuritySettings
 
 logging.basicConfig(
@@ -18,77 +18,148 @@ logger = logging.getLogger(__name__)
 
 aasx_mcp = FastMCP("aasx_server",
                    instructions="""
-                        ID GENERATION RULE: 
-                        All new submodel IDs must follow the pattern: https://example.com/ids/sm/XXXX_XXXX_XXXX_XXXX 
-                        where X is a random digit. 
+                    ID GENERATION RULE:
+                    All new submodel IDs MUST follow this exact pattern:
+                    https://example.com/ids/sm/XXXX_XXXX_XXXX_XXXX   (submodel)
+                    https://example.com/ids/aas/XXXX_XXXX_XXXX_XXXX  (shell)
+                    where each X is a random digit. Always call generate_aas_numeric_id() to produce IDs. Never invent IDs manually.
 
-                        SUBMODEL CREATION RULE:
-                        When creating a new submodel, ALWAYS first fetch an existing submodel from the server 
-                        using get_submodel_standalone to use as a structural reference.
-                        Copy the structure exactly, replace only id (generate a new one), idShort, and element values.
-                        Never guess the schema from scratch.
+                    ─────────────────────────────────────────────
+                    SUBMODEL CREATION — MANDATORY SEQUENCE
+                    ─────────────────────────────────────────────
+                    Follow these steps IN ORDER. Never skip or reorder them.
 
-                        SUBMODEL ID RULE:
-                        The 'id' field is MANDATORY at the root of every submodel JSON before calling create_submodel.
-                        Never call create_submodel without 'id' present at the root level.
-                        A missing 'id' will cause a 409 or 400 error.
+                    STEP 1 — Generate ID first:
+                    Call generate_aas_numeric_id(is_submodel=True).
+                    Store the returned value. This is the ONLY valid ID for the new submodel.
 
-                        CLONING RULE:
-                        When cloning a submodel from a template:
-                        1. Call generate_aas_numeric_id(is_submodel=True) FIRST — before building any JSON
-                        2. Store that returned ID
-                        3. Use ONLY that returned ID in the 'id' field of the new submodel payload
-                        4. NEVER copy the 'id' field from the template submodel — that ID already exists and will cause 409 Conflict
-                        5. NEVER use an ID you did not receive from generate_aas_numeric_id in this session
-                        6. Remove 'semanticId' from the root level before posting
+                    STEP 2 — Fetch a reference submodel:
+                    Call get_submodel_standalone() on an existing submodel from the server.
+                    Use its structure as the base. Never construct a submodel schema from memory.
 
-                        409 AUTONOMOUS RECOVERY RULE:
-                        If create_submodel returns 409:
-                        1. Delete 'semanticId' from the root of the submodel JSON
-                        2. Retry create_submodel immediately with the same ID
-                        3. If it still returns 409, generate a brand new ID and retry once more
-                        4. Never stop and ask the user what to do on a 409 — always recover autonomously
+                    STEP 3 — Build the payload:
+                    - Set "id" to the value returned in STEP 1. No other value is acceptable.
+                    - Set "idShort" to the new submodel name.
+                    - Replace element values as needed.
+                    - Remove "semanticId" from the ROOT LEVEL ONLY. Nested semanticIds inside
+                        submodelElements must be kept exactly as they are.
+                    - Never copy the "id" from the reference submodel. That ID already exists
+                        and will cause a 409 Conflict.
+                    - Never add elements that do not exist in the reference submodel. If new
+                        elements are needed, copy the closest matching element from the reference
+                        and modify it. Never invent element structures from memory.
 
-                        ORDER RULE:
-                        Always create_submodel BEFORE link_submodel.
-                        Never call link_submodel until create_submodel returns a successful response.
-                        A 409 on link_submodel is acceptable (already linked). A 409 on create_submodel means stop and generate a new ID.
+                    STEP 4 — Validate the payload structure:
+                    The payload MUST match this structure exactly before calling create_submodel:
 
-                        SAVING RULE:
-                        After ANY operation that creates, updates, or deletes a shell or submodel,
-                        ALWAYS call save_aas_changes() as the final step.
-                        Never finish a task that modifies the AAS without saving.
-                        
-                        JSON VALIDATION:
-                        BaSyx V3 requires 'id' and 'idShort' at the root. 
-                        Do not wrap 'id' inside an 'identification' object.
-                        Always include 'modelType': 'Submodel' and 'kind': 'Instance'.
-
-
-                        SUBMODEL JSON STRUCTURE RULE:
-                        A valid BaSyx V3 submodel MUST follow this exact structure. Never deviate from it:
-
-                        {
+                    {
                         "id": "https://example.com/ids/sm/XXXX_XXXX_XXXX_XXXX",
                         "idShort": "MySubmodel",
                         "modelType": "Submodel",
                         "kind": "Instance",
                         "submodelElements": [
-                            {
+                        {
                             "idShort": "MyProperty",
                             "modelType": "Property",
                             "valueType": "xs:string",
                             "value": "my_value"
-                            }
-                        ]
                         }
+                        ]
+                    }
 
-                        RULES:
-                        - valueType MUST be "xs:string", "xs:int", "xs:boolean", "xs:float" — never plain "string" or "integer"
-                        - Never wrap the payload in any outer key like "submodel": {...}
-                        - Never include "idType", "identification", or any AAS V2 fields
-                        - Never include "semanticId" at the root level
-                        - submodelElements is a flat list — each element needs idShort, modelType, valueType, value
+                    VALIDATION CHECKLIST — every item must pass before proceeding:
+                    ✓ "id" is present at root level (not inside "identification" or any wrapper)
+                    ✓ "idShort" is present at root level
+                    ✓ "modelType" is "Submodel"
+                    ✓ "kind" is "Instance"
+                    ✓ No "semanticId" at root level
+                    ✓ No AAS V2 fields: "idType", "identification"
+                    ✓ Payload is NOT wrapped in any outer key (e.g. no {"submodel": {...}})
+                    ✓ All valueType values use xs: prefix — "xs:string", "xs:int", "xs:boolean",
+                        "xs:float", "xs:date", "xs:anyURI" — never plain "string" or "integer"
+                    ✓ All xs:date values use ISO 8601 format with dashes: "YYYY-MM-DD"
+                    ✓ All xs:dateTime values use ISO 8601 format: "YYYY-MM-DDTHH:MM:SS"
+                    ✓ No valueType mismatch — if valueType is "xs:integer" the value must be
+                        a number, not a string. If the value is text, use "xs:string" instead.
+                    ✓ Every File element has a "contentType" field (see FILE ELEMENT RULE below)
+
+                    STEP 5 — Call create_submodel:
+                    Pass the validated payload. Do NOT call link_submodel before this succeeds.
+
+                    STEP 6 — Handle 409 Conflict autonomously (do NOT ask the user):
+                    On first 409:
+                        → Remove "semanticId" from root level if still present, retry with same ID.
+                    On second 409:
+                        → Call generate_aas_numeric_id(is_submodel=True) for a brand new ID.
+                        → Rebuild the payload with the new ID, retry.
+                    On third 409:
+                        → Call generate_aas_numeric_id(is_submodel=True) for another brand new ID.
+                        → Rebuild the payload with the new ID, retry.
+                    If all three attempts fail:
+                        → Report the error to the user, listing all three IDs that were attempted.
+                    Never stop to ask the user during this retry loop.
+
+                    STEP 7 — Handle 400 Bad Request autonomously (do NOT ask the user):
+                    A 400 means the payload has a schema or validation error. Do the following:
+                    1. Re-run the full VALIDATION CHECKLIST from STEP 4 against the payload.
+                    2. Fix every item that fails the checklist.
+                    3. Pay special attention to: date formats, valueType mismatches, File elements.
+                    4. Retry create_submodel with the corrected payload.
+                    5. If a second 400 occurs, report the error and the full payload to the user.
+                    Never stop to ask the user on the first 400 — always attempt self-correction.
+
+                    STEP 8 — Link the submodel:
+                    Only call link_submodel AFTER create_submodel returns a success response.
+                    A 409 from link_submodel is acceptable — it means the submodel is already
+                    linked. Treat it as success and continue.
+
+                    STEP 9 — Save:
+                    Always call save_aas_changes() as the final step after any create, update,
+                    or delete operation. Never finish a task that modifies the AAS without saving.
+
+                    ─────────────────────────────────────────────
+                    FILE ELEMENT RULE
+                    ─────────────────────────────────────────────
+                    Every element with "modelType": "File" MUST include a "contentType" field.
+
+                    Valid example:
+                    {
+                        "idShort": "ReleaseInfo",
+                        "modelType": "File",
+                        "contentType": "text/plain",
+                        "value": "/aasx/files/releasenotes.txt"
+                    }
+
+                    If a File element from the reference submodel has no value or no contentType,
+                    OMIT it entirely from the cloned payload. Never copy an incomplete File element.
+                    Incomplete File elements will cause a 400 Bad Request.
+
+                    ─────────────────────────────────────────────
+                    VALUE TYPE RULE
+                    ─────────────────────────────────────────────
+                    The "valueType" and "value" fields must always be compatible:
+                    xs:string    → value is any text string
+                    xs:int       → value is a whole number, e.g. 42
+                    xs:float     → value is a decimal number, e.g. 3.14
+                    xs:boolean   → value is "true" or "false"
+                    xs:date      → value is "YYYY-MM-DD"
+                    xs:dateTime  → value is "YYYY-MM-DDTHH:MM:SS"
+                    xs:anyURI    → value is a valid URI string
+
+                    If the actual value does not match the declared valueType, change the
+                    valueType to match the value — never change the value to fit a wrong type.
+
+                    ─────────────────────────────────────────────
+                    DELETE RESPONSE RULE
+                    ─────────────────────────────────────────────
+                    A DELETE returning HTTP 204 with no response body is a SUCCESS.
+                    Do not treat an empty body on DELETE as an error. Continue normally.
+
+                    ─────────────────────────────────────────────
+                    SAVING RULE
+                    ─────────────────────────────────────────────
+                    Always call save_aas_changes(shell_id=<the shell's full IRI>) after any create,
+                    update, or delete. Only omit shell_id if explicitly saving all shells.
                         """
                         )
 
@@ -253,21 +324,28 @@ async def delete_submodel_ref_to_shell(shell_id: str, submodel_id: str) -> dict:
 
 
 @aasx_mcp.tool()
-async def save_aas_changes() -> str:
+async def save_aas_changes(shell_id: str) -> str:
     """
-    Saves the current state of all AAS shells to the persistent aasxs_agent/ folder.
-    Call this after creating, updating, or deleting any shell or submodel.
+    Persists a newly created shell to the local aasxs/ folder as a valid .aasx file
+    so it survives server restarts. Only saves shells that don't already have a file
+    on disk — existing .aasx files are never modified.
+    
+    Always call this after create_shell, passing the full shell IRI.
     """
     try:
-        result = subprocess.run(
-            [sys.executable, "-m", "src.mcp.aasx.save_aasx_changes"],
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
+        cmd = [
+            sys.executable, "-m", "src.mcp.aasx.save_aasx",
+            "--shell-id", shell_id,
+            "--url", Config.AAS_BASE_URL,
+            "--out", Config.AASX_AGENT_DIR,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+
         if result.returncode != 0:
             return f"Save failed:\n{result.stderr}"
+
         return f"Save successful:\n{result.stdout}"
+
     except Exception as e:
         return f"Save error: {e}"
 

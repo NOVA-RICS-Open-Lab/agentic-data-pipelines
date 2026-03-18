@@ -43,7 +43,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ./aasxs:/app/aasxs
+      - ./aasxs:/app/aasxs   
   aasx-mcp-service:
     profiles: ["http"]
     build: ./agent-runtime
@@ -59,6 +59,8 @@ services:
       - AAS_BASE_URL=http://aasx-server:5001
     depends_on:
       - aasx-server
+    volumes:
+      - ./aasxs:/app/aasxs
     networks:
       - agentic-net
 
