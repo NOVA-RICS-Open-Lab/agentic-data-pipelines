@@ -4,6 +4,7 @@ import sys
 import os
 import logging
 import random
+import uuid
 import subprocess
 import sys
 from src.config.config import Config
@@ -102,7 +103,28 @@ async def update_submodel_element_value(shell_id: str, submodel_id: str, id_shor
 
 @aasx_mcp.tool()
 async def create_submodel(submodel: dict) -> dict:
-    """Create a new submodel. Pass the complete submodel dictionary."""
+    """
+    Create a new submodel on the AAS server.
+    
+    CRITICAL: submodel argument is REQUIRED. Never call this without it.
+    The payload must be a complete valid JSON dict passed as the named argument.
+
+    Pass the submodel dict directly:
+    create_submodel(submodel={
+        "id": "https://example.com/ids/sm/XXXX_XXXX_XXXX_XXXX",
+        "idShort": "Collection",
+        "kind": "Instance",
+        "modelType": "Submodel",
+        "submodelElements": [...]
+    })
+
+
+    Rules:
+    - id must come from generate_aas_numeric_id(is_submodel=True)
+    - Never include semanticId or administration fields
+    - If you get a 409, generate a new id and retry — never change idShort
+    - If you get a 400, the payload structure is invalid — check modelType and valueType fields
+    """
     return AASClient.create_submodel(submodel)
 
 @aasx_mcp.tool()
@@ -131,15 +153,13 @@ async def link_submodel(shell_id: str, submodel_id: str) -> dict:
 
 @aasx_mcp.tool()
 async def generate_aas_numeric_id(is_submodel: bool) -> str:
-    """Generates a unique-style numeric ID following the 4-group pattern: XXXX_XXXX_XXXX_XXXX
-     is_submodel=True  → https://example.com/ids/sm/XXXX_XXXX_XXXX_XXXX
-    is_submodel=False → https://example.com/ids/aas/XXXX_XXXX_XXXX_XXXX
-    """
-    parts = ["".join(random.choices("0123456789", k=4)) for _ in range(4)]
-    numeric_id = "_".join(parts)
-    if(is_submodel):
-        return f"https://example.com/ids/sm/{numeric_id}"
-    else: return f"https://example.com/ids/aas/{numeric_id}"
+    # Use uuid4 to guarantee uniqueness across restarts
+    parts = uuid.uuid4().hex[:16]
+    numeric_id = "_".join(
+        str(int(parts[i:i+4], 16) % 10000).zfill(4) for i in range(0, 16, 4)
+    )
+    prefix = "sm" if is_submodel else "aas"
+    return f"https://example.com/ids/{prefix}/{numeric_id}"
 
 @aasx_mcp.tool()
 async def create_shell(shell_payload: dict) -> dict:
@@ -153,11 +173,15 @@ async def create_shell(shell_payload: dict) -> dict:
     - modelType: "AssetAdministrationShell"
     - assetInformation: {
         "assetKind": "Instance",
-        "globalAssetId": <same value as id if the user did not specify one>
+        "globalAssetId": <same value as id>
       }
 
-    Do NOT include 'submodels_content' — that is a local enrichment field only.
-    Do NOT wrap the payload: pass the dict directly, not as {"payload": {...}}.
+    Rules:
+    - id must come from generate_aas_numeric_id(is_submodel=False)
+    - globalAssetId must equal id
+    - Do NOT include submodels_content
+    - Do NOT wrap in any outer key
+    - Do NOT embed submodels — link them after with link_submodel()
     """
     return AASClient.create_shell(shell_payload)
 
@@ -227,6 +251,51 @@ async def save_aas_changes(shell_id: str) -> str:
 
     except Exception as e:
         return f"Save error: {e}"
+    
+# @aasx_mcp.tool()
+# async def clone_submodel(source_submodel_id: str, new_idShort: str,) -> dict:
+#     """
+#     Clones a submodel from the server and returns a ready-to-create payload with a fresh ID.
+#     Always use this instead of constructing submodel payloads manually.
+#
+#     USAGE — always follow this exact sequence:
+#     1. payload = clone_submodel(source_submodel_id=..., new_idShort=...)
+#     2. create_submodel(submodel=payload)       ← pass returned dict immediately (IMPORTANT)
+#     3. link_submodel(shell_id=..., submodel_id=payload["id"])
+#     4. update_submodel_element(...)            ← fill in pipeline-specific values
+#
+#     When populating empty fields after creation:
+#     - Derivable from context (AAS_ID, AAS_Name, Endpoint, Protocol) → fill automatically
+#     - Flag fields (Enabled, Allows) with no clear instruction → default false, flag to user
+#     - Fields requiring user decisions → leave empty, list them explicitly for user review
+#     """
+#
+#     # Fetch the blueprint exactly as stored
+#     source = AASClient.get_submodel_standalone(source_submodel_id)
+#
+#     # Generate fresh ID
+#     parts = ["".join(random.choices("0123456789", k=4)) for _ in range(4)]
+#     new_id = f"https://example.com/ids/sm/{'_'.join(parts)}"
+#
+#     # Strip conflicting fields
+#     source.pop("semanticId", None)
+#     source.pop("administration", None)
+#     source.pop("submodels_content", None)
+#
+#     # Replace identity fields
+#     source["id"] = new_id
+#     source["idShort"] = new_idShort
+#
+#     return source
+
+@aasx_mcp.tool()
+async def get_all_submodels() -> dict:
+    """
+    Returns all submodels on the server
+    """
+
+    return AASClient.return_all_submodels()
+
 
 if __name__ == "__main__":  
     mode = os.getenv("MCP_CONNECTION_MODE", "stdio").lower()

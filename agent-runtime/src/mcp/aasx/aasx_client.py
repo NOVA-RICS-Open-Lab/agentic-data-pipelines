@@ -101,7 +101,7 @@ class AASClient:
     
 
     @staticmethod
-    def _delete_json(url: str, json_data: dict = None) -> dict:
+    def _delete_json(url: str, json_data: dict = {}) -> dict:
         """DELETE helper with optional request body.
         Returns empty dict on 204 No Content (success with no body)."""
         headers = {"Accept": "application/json"}
@@ -240,3 +240,8 @@ class AASClient:
         submodel_enc = AASClient.aas_id_encode(submodel_id)
         url = f"{Config.AAS_BASE_URL}/shells/{shell_encoded}/submodel-refs/{submodel_enc}" 
         return AASClient._delete_json(url)
+    
+    @staticmethod
+    def return_all_submodels() -> dict:
+        url = f"{Config.AAS_BASE_URL}/submodels"
+        return AASClient._get_json(url)

@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "aas-mcp>=0.0.1",
+    "asyncua>=1.1.0",
     "agent-squad[all]>=1.0.2",
     "anthropic>=0.49.0",
     "autogen-agentchat>=0.4.9.2",
@@ -42,6 +43,8 @@ dependencies = [
     "smithery>=0.1.0",
     "speedtest-cli>=2.1.3",
     "wikipedia>=1.4.0",
+    "confluent-kafka>=2.3.0",
+    "pymongo>=4.6.0",
 ]
 
 [dependency-groups]
