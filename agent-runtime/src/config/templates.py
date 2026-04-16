@@ -138,10 +138,7 @@ class Templates:
             - OPC-UA server: browse and read values from OPC-UA endpoints
             - Kafka server: manage topics and deploy ksqlDB stream processors
             - MongoDB server: manage collections, Kafka Connect sinks, and query documents
-            - Docker server: manage OPC-UA to Kafka bridge containers with the following tools:
-                * list_opcua_kafka_bridges(): check if a bridge is already running before deploying
-                * start_opcua_kafka(topic): start an OPC-UA to Kafka bridge for a given topic
-                * stop_opcua_kafka(): stop the running OPC-UA to Kafka bridge
+            - Docker server: manage OPC-UA to Kafka bridge containers
             - Grafana server: manage Grafana datasources
             
             IMPORTANT RULE: Always call list_opcua_kafka_bridges() before calling start_opcua_kafka() 
