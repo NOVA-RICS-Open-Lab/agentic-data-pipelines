@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class SystemAgent:
     """Single generic agent coordinating MCP servers."""
 
-    def __init__(self, name: str = "SystemAgent", model_name: str = "gpt-4.1-mini"):
+    def __init__(self, name: str = "SystemAgent", model_name: str = "gpt-5-mini"):  ##gpt-4.1-mini
         self.name = name
         self.agent: Agent | None = None
         self.model_name = model_name

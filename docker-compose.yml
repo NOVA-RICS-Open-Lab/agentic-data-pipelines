@@ -1,19 +1,151 @@
 services:
+  # aas-env:
+  #   container_name: aas-env
+  #   image:  docker.io/adminshellio/aas-env-blazor-for-demo:0.3.1.651-aasv3-alpha-latest     ##0.3.1.284-aasv3-alpha-latest  #0.3.1.651-aasv3-alpha-latest
+  #   restart: unless-stopped
+  #   ports:
+  #     - "5001:5001"
+  #   environment:
+  #     - Kestrel__Endpoints__Http__Url=http://*:5001
+  #   volumes:
+  #     - ./aasxs:/AasxServerBlazor/aasxs  ## ./aasxs_agent:/AasxServerBlazor/aasxs_agent - ./aasxs:/AasxServerBlazor/aasxs NOTA: Se o folder(aasxs_agent) estiver vazio é preciso correr o codigo com aasx no final e depois  
+  #     #- ./aasxs/database.db:/AasxServerBlazor/database.db
+  #   command: --no-security --rest --external-blazor http://localhost:5001 -with-db --edit  ## -with-db
+  #   networks:
+  #     - agentic-net
+
   aasx-server:
+    image: eclipsebasyx/aas-environment:2.0.0-SNAPSHOT
     container_name: aasx-server
-    image:  docker.io/adminshellio/aasx-server-blazor-for-demo:0.3.1.284-aasv3-alpha-latest  #0.3.1.651-aasv3-alpha-latest
-    restart: unless-stopped
-    ports:
-      - "5001:5001"
     environment:
-      - Kestrel__Endpoints__Http__Url=http://*:5001
+      - SERVER_PORT=5001
+      - JAVA_TOOL_OPTIONS=-Dpoi.byteArrayMaxOverride=450000000
+    env_file:
+      - .env 
     volumes:
-      - ./aasxs:/AasxServerBlazor/aasxs  ## ./aasxs_agent:/AasxServerBlazor/aasxs_agent - ./aasxs:/AasxServerBlazor/aasxs NOTA: Se o folder(aasxs_agent) estiver vazio é preciso correr o codigo com aasx no final e depois  
-      #- ./aasxs/database.db:/AasxServerBlazor/database.db
-    command: --no-security --rest --external-blazor http://localhost:5001 -with-db --edit  ## -with-db
+      - ./aasxs:/application/aas
+      - ./basyx/aas-env.properties:/application/application.properties
+    ports:
+      - '5051:5001'
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 180s
+    depends_on:
+      aas-registry:
+        condition: service_healthy
+      aas-sm-registry:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
     networks:
       - agentic-net
 
+  aas-registry:
+    image: eclipsebasyx/aas-registry-log-mongodb:2.0.0-SNAPSHOT
+    container_name: aas-registry
+    ports:
+      - '5010:5010'
+    environment:
+      - SERVER_PORT=5010
+    env_file:
+    - .env
+    volumes:
+      - ./basyx/aas-registry.yml:/workspace/config/application.yml
+    restart: always
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5010/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 90s 
+    networks:
+      - agentic-net
+
+  aas-sm-registry:
+    image: eclipsebasyx/submodel-registry-log-mongodb:2.0.0-SNAPSHOT
+    container_name: aas-sm-registry
+    ports:
+      - '5020:5020'
+    env_file:
+    - .env
+    environment:
+      - SERVER_PORT=5020
+    volumes:
+      - ./basyx/sm-registry.yml:/workspace/config/application.yml
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5020/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - agentic-net
+
+  aas-discovery:
+    image: eclipsebasyx/aas-discovery:2.0.0-SNAPSHOT
+    container_name: aas-discovery
+    env_file:
+      - .env
+    environment:
+      - SERVER_PORT=5030
+    volumes:
+      - ./basyx/aas-discovery.properties:/application/application.properties
+    ports:
+      - '5030:5030'
+    restart: always
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - agentic-net
+  
+  aas-web-ui:
+    image: eclipsebasyx/aas-gui:SNAPSHOT
+    container_name: aas-web-ui
+    ports:
+      - '5040:3000'
+    environment:
+      AAS_REGISTRY_PATH: http://localhost:5010/shell-descriptors      # ← was 5020
+      SUBMODEL_REGISTRY_PATH: http://localhost:5020/submodel-descriptors  # ← was 5021
+      AAS_REPO_PATH: http://localhost:5051/shells                     # ← was 5020
+      SUBMODEL_REPO_PATH: http://localhost:5051/submodels             # ← was 5020
+      CD_REPO_PATH: http://localhost:5051/concept-descriptions        # ← was 5020
+      AAS_DISCOVERY_PATH: http://localhost:5030/lookup/shells         # ← correct
+      DASHBOARD_SERVICE_PATH: http://localhost:5060/api/elements      # ← was 5035
+      PRIMARY_COLOR: '#144AF6'
+    restart: always
+    depends_on:
+      aasx-server:
+        condition: service_healthy
+    networks:
+      - agentic-net
+
+  dashboard-api:
+    image: aaronzi/basyx-dashboard-api:SNAPSHOT_02
+    container_name: dashboard-api
+    env_file:
+      - .env
+    ports:
+      - '5060:5060'
+    volumes:
+      - ./basyx/aas-dashboard.yml:/application.yml
+    restart: always
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - agentic-net
 
   agent-runtime:
     container_name: agent-runtime
@@ -216,6 +348,11 @@ services:
     volumes:
       - ./mongodb/data:/data/db
       - ./mongodb/logs:/var/log/mongodb
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/27017"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - agentic-net
 
@@ -330,6 +467,8 @@ services:
     image: grafana/grafana:latest
     container_name: grafana
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
       - "3000:3000"
     environment:
