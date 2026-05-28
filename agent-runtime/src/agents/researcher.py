@@ -27,7 +27,6 @@ class ResearcherAgent:
             instructions=Templates.researcher_agent(),
             model=Config.get_model(self.model_name),
             mcp_servers=mcp_servers,
-            output_type=TechnologyContext,
         )
         return self.agent
 

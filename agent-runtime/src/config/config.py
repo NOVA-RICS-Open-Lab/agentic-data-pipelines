@@ -29,6 +29,11 @@ class Config:
     GRAFANA_URL = os.getenv("GRAFANA_URL")
     GRAFANA_PASSWORD = os.getenv("GRAFANA_AGENT_TOKEN")
 
+    MCP_RESEARCHER_URL = os.getenv("MCP_RESEARCHER_URL", "http://websearch-mcp-service:8091/mcp")
+    MCP_RESEARCH_AGENT_URL = os.getenv("MCP_RESEARCH_AGENT_URL", "http://research-mcp-service:8093/mcp")
+    MCP_GENERATOR_AGENT_URL = os.getenv("MCP_GENERATOR_AGENT_URL", "http://generator-mcp-service:8094/mcp")
+    MCP_ORCHESTRATOR_AGENT_URL = os.getenv("MCP_ORCHESTRATOR_AGENT_URL", "http://orchestrator-mcp-service:8095/mcp")
+
     # AASX folder paths
     AASX_SOURCE_DIR = os.getenv("AASX_SOURCE_DIR", "/AasxServerBlazor/aasxs")
     AASX_AGENT_DIR  = os.getenv("AASX_AGENT_DIR",  "/app/aasxs")
@@ -40,13 +45,20 @@ class Config:
     OPENAI_CLIENT=AsyncOpenAI(api_key=OPENAI_API_KEY)
 
     mcp_server_params_list = []
+    researcher_mcp_params_list = [{"url": MCP_RESEARCHER_URL}]
+    orchestrator_mcp_params_list = []
+    generator_mcp_params_list = []
 
     if MCP_MODE == "http":
         # HTTP Mode
-        for url in [MCP_HTTP_URL, MCP_OPCUA_URL, MCP_KAFKA_URL, MCP_MONGO_URL, MCP_DOCKER_URL, MCP_GRAFANA_URL]: # MCP_NODERED_URL, removido
+        for url in [MCP_HTTP_URL, MCP_OPCUA_URL, MCP_MONGO_URL, MCP_DOCKER_URL, MCP_GRAFANA_URL, MCP_ORCHESTRATOR_AGENT_URL]:  ##MCP_KAFKA_URL
             if url :
                 mcp_server_params_list.append({"url": url})
         
+        orchestrator_mcp_params_list = [
+            {"url": MCP_RESEARCH_AGENT_URL},
+            {"url": MCP_GENERATOR_AGENT_URL}
+        ]
     else:
         # Stdio Mode
         mcp_server_params_list.append({
@@ -58,9 +70,9 @@ class Config:
 
 
     MAX_TURNS = 30  ##10
+    @staticmethod
     def get_model(model_name: str):
         if "gpt" in model_name:
             return OpenAIChatCompletionsModel(model=model_name, openai_client=Config.OPENAI_CLIENT)
         else:
             return model_name
-    

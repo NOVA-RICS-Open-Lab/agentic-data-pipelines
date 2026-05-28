@@ -9,10 +9,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class SystemAgent:
-    """Single generic agent coordinating MCP servers."""
+class GeneratorAgent:
+    """Single generator agent making MCP Tools."""
 
-    def __init__(self, name: str = "SystemAgent", model_name: str = "gpt-4.1-mini"):  ##gpt-4.1-mini gpt-5-mini
+    def __init__(self, name: str = "GeneratorAgent", model_name: str = "gpt-4.1-mini"):  ##gpt-4.1-mini gpt-5-mini
         self.name = name
         self.agent: Agent | None = None
         self.model_name = model_name
@@ -24,7 +24,7 @@ class SystemAgent:
     async def create_agent(self, mcp_servers) -> Agent:
         self.agent = Agent(
             name=self.name,
-            instructions=Templates.system_agent(),
+            instructions=Templates.generator_agent(),
             model=Config.get_model(self.model_name),
             mcp_servers=mcp_servers,
         )
@@ -39,7 +39,7 @@ class SystemAgent:
         
         await self.init_mcp()
         
-        # Create the agent
+       
         if self.agent is None:
             self.agent = await self.create_agent(self.mcp_servers)
         
@@ -62,7 +62,7 @@ class SystemAgent:
         if self.mcp_servers is None:
             await self.mcp_stack.__aenter__()
             self.mcp_servers = []
-            for params in Config.mcp_server_params_list:
+            for params in Config.generator_mcp_params_list:
                 if "url" in params:
                     logger.info(f"Connecting to HHTP MCP server at {params['url']}")
                     server = await self.mcp_stack.enter_async_context(
@@ -95,7 +95,7 @@ class SystemAgent:
         trace_name = f"{self.name}-working"
         trace_id = make_trace_id(f"{self.name.lower()}")
 
-        # store user message
+        
         self.history.append({"role": "user", "content": prompt})
 
         with trace(trace_name, trace_id=trace_id):
@@ -120,7 +120,7 @@ class SystemAgent:
                     event.data, ResponseTextDeltaEvent
                 ):
                     assistant_text += event.data.delta
-                    yield event.data.delta  # streaming per token
+                    yield event.data.delta  
 
-            # append assistant response to history
+            
             self.history.append({"role": "assistant", "content": assistant_text})

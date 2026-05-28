@@ -1,0 +1,62 @@
+from mcp.server.fastmcp import FastMCP
+import sys
+import os
+import logging
+from src.config.config import Config
+from mcp.server.transport_security import TransportSecuritySettings
+{% for imp in extra_imports %}
+{{ imp }}
+{% endfor %}
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stderr)]
+)
+logger = logging.getLogger(__name__)
+
+{{ technology_lower }}_mcp = FastMCP(
+    "{{ technology_lower }}_server",
+    instructions="""
+{{ server_instructions|indent(8, first=True) }}
+    """,
+)
+
+{% if module_constants %}
+{% for const in module_constants %}
+{{ const }}
+{% endfor %}
+
+{% endif %}
+{% if helper_functions %}
+{% for helper in helper_functions %}
+{{ helper.code }}
+
+{% endfor %}
+{% endif %}
+{% for tool in tools %}
+@{{ technology_lower }}_mcp.tool()
+async def {{ tool.name }}({{ tool.params_signature }}) -> {{ tool.return_type }}:
+    """
+{{ tool.docstring|indent(4, first=True) }}
+    """
+{{ tool.body|indent(4, first=True) }}
+
+{% endfor %}
+
+if __name__ == "__main__":
+    mode = os.getenv("MCP_CONNECTION_MODE", "stdio").lower()
+    logger.info(f"Starting {{ technology_pascal }} MCP server in {mode} mode")
+
+    if mode == "http":
+        port = int(os.getenv("PORT", {{ default_port }}))
+        logger.info(f"HTTP mode - listening on port {port}")
+        {{ technology_lower }}_mcp.settings.port = port
+        {{ technology_lower }}_mcp.settings.host = "0.0.0.0"
+        {{ technology_lower }}_mcp.settings.transport_security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=False
+        )
+        {{ technology_lower }}_mcp.run(transport="streamable-http")
+    else:
+        logger.info("STDIO mode")
+        {{ technology_lower }}_mcp.run(transport="stdio")
