@@ -6,6 +6,8 @@ from openai.types.responses import ResponseTextDeltaEvent
 from src.utils import make_trace_id
 import logging
 from src.agents.researcher_schema import TechnologyContext
+from src.a2a.host import create_a2a_app
+from src.agents.cards import RESEARCHER_CARD
 logger = logging.getLogger(__name__)
 
 
@@ -20,6 +22,21 @@ class ResearcherAgent:
         self.mcp_stack = AsyncExitStack()
         self.mcp_servers = None
         self.initialized = False
+
+    async def handle_a2a_task(self, params: dict):
+        task = params.get("task")
+        if not task:
+            return "No task provided"
+
+        self.history = []   #Clean history each task
+
+        result = ""
+        async for delta in self.run(task):
+            result += delta
+        return result
+
+    def get_a2a_app(self):
+        return create_a2a_app(RESEARCHER_CARD, self.handle_a2a_task)
 
     async def create_agent(self, mcp_servers) -> Agent:
         self.agent = Agent(

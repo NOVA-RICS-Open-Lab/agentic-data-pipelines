@@ -34,6 +34,13 @@ class Config:
     MCP_GENERATOR_AGENT_URL = os.getenv("MCP_GENERATOR_AGENT_URL", "http://generator-mcp-service:8094/mcp")
     MCP_ORCHESTRATOR_AGENT_URL = os.getenv("MCP_ORCHESTRATOR_AGENT_URL", "http://orchestrator-mcp-service:8095/mcp")
 
+    A2A_RESEARCHER_URL = os.getenv("A2A_RESEARCHER_URL", f"http://research-mcp-service:8093/a2a")
+    A2A_GENERATOR_URL = os.getenv("A2A_GENERATOR_URL", f"http://generator-mcp-service:8094/a2a")
+    
+    A2A_ORCHESTRATOR_URL = os.getenv("A2A_ORCHESTRATOR_URL", f"http://orchestrator-mcp-service:8095/a2a")
+    A2A_REVIEWER_URL = os.getenv("A2A_REVIEWER_URL", f"http://reviewer-mcp-service:8096/a2a")
+
+
     # AASX folder paths
     AASX_SOURCE_DIR = os.getenv("AASX_SOURCE_DIR", "/AasxServerBlazor/aasxs")
     AASX_AGENT_DIR  = os.getenv("AASX_AGENT_DIR",  "/app/aasxs")
@@ -48,17 +55,15 @@ class Config:
     researcher_mcp_params_list = [{"url": MCP_RESEARCHER_URL}]
     orchestrator_mcp_params_list = []
     generator_mcp_params_list = []
+    reviewer_mcp_params_list = []
 
     if MCP_MODE == "http":
         # HTTP Mode
-        for url in [MCP_HTTP_URL, MCP_OPCUA_URL, MCP_MONGO_URL, MCP_DOCKER_URL, MCP_GRAFANA_URL, MCP_ORCHESTRATOR_AGENT_URL]:  ##MCP_KAFKA_URL
+        for url in [MCP_HTTP_URL, MCP_OPCUA_URL, MCP_MONGO_URL, MCP_DOCKER_URL, MCP_GRAFANA_URL]:  ##MCP_KAFKA_URL
             if url :
                 mcp_server_params_list.append({"url": url})
         
-        orchestrator_mcp_params_list = [
-            {"url": MCP_RESEARCH_AGENT_URL},
-            {"url": MCP_GENERATOR_AGENT_URL}
-        ]
+        orchestrator_mcp_params_list = []
     else:
         # Stdio Mode
         mcp_server_params_list.append({

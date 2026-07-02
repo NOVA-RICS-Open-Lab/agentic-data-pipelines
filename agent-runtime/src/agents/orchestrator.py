@@ -1,9 +1,12 @@
-from agents import Agent, Runner, trace # type: ignore
+from agents import Agent, Runner, trace, function_tool # type: ignore
 from src.config import Templates, Config
 from contextlib import AsyncExitStack
 from agents.mcp import MCPServerStdio, MCPServerSse, MCPServerStreamableHttp # type: ignore
 from openai.types.responses import ResponseTextDeltaEvent # type: ignore
 from src.utils import make_trace_id
+from src.a2a.host import create_a2a_app
+from src.a2a.client import A2AClient
+from src.agents.cards import ORCHESTRATOR_CARD, RESEARCHER_CARD, GENERATOR_CARD, REVIEWER_CARD
 import logging
 import asyncio
 
@@ -20,7 +23,12 @@ class OrchestratorAgent:
         self.history: list[dict] = []
         self.mcp_stack = AsyncExitStack()
         self.mcp_servers = None
+        self.local_tools: list = []
         self.initialized = False
+        
+        self.researcher_client = A2AClient(Config.A2A_RESEARCHER_URL)
+        self.generator_client = A2AClient(Config.A2A_GENERATOR_URL)
+        self.reviewer_client = A2AClient(Config.A2A_REVIEWER_URL)
 
     async def create_agent(self, mcp_servers) -> Agent:
         self.agent = Agent(
@@ -28,6 +36,7 @@ class OrchestratorAgent:
             instructions=Templates.orchestrator_agent(),
             model=Config.get_model(self.model_name),
             mcp_servers=mcp_servers,
+            tools=self.local_tools,
         )
         return self.agent
     
@@ -106,9 +115,102 @@ class OrchestratorAgent:
                             logger.error(f"Failed to connect after {max_retries} attempts: {e}")
                             raise e
 
+            self.local_tools = []
 
+            # Add A2A Worker Proxy Tools
+            @function_tool(
+                name_override="research_technology",
+                description_override="Search for technical context about a technology. While providing additional context (version, library to use)"
+            )
+            async def research_technology(tech_name: str, additional_information: str) -> str:
+                error = self._check_tool_limit("research_technology")
+                if error: return error
+
+                params = {"task": f"Research the following technology: {tech_name}. Helpful information: {additional_information}"}
+                result = await self.researcher_client.call("execute_task", params)
+                # Researcher returns a string directly
+                return result
+
+            @function_tool(
+                name_override="clarify",
+                description_override="Clarify specific technical details using existing context."
+            )
+            async def clarify(question: str, existing_context: str) -> str:
+                error = self._check_tool_limit("clarify")
+                if error: return error
+
+                params = {"task": f"Clarify this question: {question}. Context: {existing_context}"}
+                result = await self.researcher_client.call("execute_task", params)
+                # Researcher returns a string directly
+                return result
+
+            @function_tool(
+                name_override="generate_mcp_server",
+                description_override="Generate an MCP server implementation from technology context."
+            )
+            async def generate_mcp_server(context_json: str) -> str:
+                error = self._check_tool_limit("generate_mcp_server")
+                if error: return error
+
+                params = {"task": f"Generate MCP server for: {context_json}"}
+                result = await self.generator_client.call("execute_task", params)
+                # Generator returns a string directly
+                return result
+
+            @function_tool(
+                name_override="review_code",
+                description_override="Review the generated MCP server code for safety and correctness."
+            )
+            async def review_code(file_path: str) -> str:
+                error = self._check_tool_limit("review_code")
+                if error: return error
+
+                params = {"task": file_path}
+                result = await self.reviewer_client.call("execute_task", params)
+                # Reviewer returns a string directly
+                return result
+
+            self.local_tools.extend([
+                research_technology,
+                clarify,
+                generate_mcp_server,
+                review_code,
+            ])
+
+    def _check_tool_limit(self, tool_name: str) -> str | None:
+        """Helper to prevent infinite tool loops."""
+        if getattr(self, "last_tool_called", None) == tool_name:
+            self.consecutive_tool_calls += 1
+        else:
+            self.last_tool_called = tool_name
+            self.consecutive_tool_calls = 1
+            
+        if self.consecutive_tool_calls >= 10:
+            logger.warning(f"Guardrail triggered: {tool_name} called {self.consecutive_tool_calls} times.")
+            return f"GUARDRAIL ERROR: You have called '{tool_name}' {self.consecutive_tool_calls} times consecutively. This indicates an infinite loop. ABORT YOUR CURRENT TASK IMMEDIATELY AND REPORT FAILURE TO THE USER."
+        return None
+
+    async def handle_a2a_task(self, params: dict):
+        """Handler for A2A tasks."""
+        task = params.get("task")
+        if not task:
+            return "No task provided"
+        
+        result = ""
+        async for chunk in self.run(task):
+            result += chunk
+        
+        return result
+
+    def get_a2a_app(self):
+        """Return a FastAPI app for A2A communication."""
+        return create_a2a_app(ORCHESTRATOR_CARD, self.handle_a2a_task)
 
     async def run(self, prompt: str):
+        # Reset tool tracking per task run
+        self.last_tool_called = None
+        self.consecutive_tool_calls = 0
+
         trace_name = f"{self.name}-working"
         trace_id = make_trace_id(f"{self.name.lower()}")
 

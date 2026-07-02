@@ -1,10 +1,12 @@
-from agents import Agent, Runner, trace
+from agents import Agent, Runner, trace, function_tool
 from src.config import Templates, Config
 from contextlib import AsyncExitStack
 from agents.mcp import MCPServerStdio, MCPServerSse, MCPServerStreamableHttp
+from src.a2a.client import A2AClient
 from openai.types.responses import ResponseTextDeltaEvent
 from src.utils import make_trace_id
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +21,9 @@ class SystemAgent:
         self.history: list[dict] = []
         self.mcp_stack = AsyncExitStack()
         self.mcp_servers = None
+        self.local_tools: list = []
         self.initialized = False
+        self.orchestrator_client = A2AClient(Config.A2A_ORCHESTRATOR_URL)
 
     async def create_agent(self, mcp_servers) -> Agent:
         self.agent = Agent(
@@ -27,6 +31,7 @@ class SystemAgent:
             instructions=Templates.system_agent(),
             model=Config.get_model(self.model_name),
             mcp_servers=mcp_servers,
+            tools=self.local_tools,
         )
         return self.agent
     
@@ -62,6 +67,38 @@ class SystemAgent:
         if self.mcp_servers is None:
             await self.mcp_stack.__aenter__()
             self.mcp_servers = []
+            self.local_tools = []
+
+            # Local A2A Orchestrator Proxy Tool
+            @function_tool(
+                name_override="request_tool_build",
+                description_override="Coordinates the construction of a new MCP server tool for the given technology. While also providing additional context from the AAS"
+            )
+            async def request_tool_build(technology_name: str, additional_context: str) -> str:
+                params = {"task": f"Build a tool for the following technology: {technology_name}. While keeping in mind the additional context provided by the AAS: {additional_context}"}
+                return await self.orchestrator_client.call("execute_task", params)
+
+            self.local_tools.append(request_tool_build)
+
+            
+            @function_tool(
+            name_override="list_my_capabilities",
+            description_override="Returns the definitive list of operational MCP tool namespaces currently connected. Use this before any gap analysis."
+            )
+            async def list_my_capabilities() -> str:
+                namespaces = {}
+                if self.mcp_servers:
+                    for server in self.mcp_servers:
+                        try:
+                            tools = await server.list_tools()
+                            server_name = getattr(server, "name", str(server))
+                            namespaces[server_name] = [t.name for t in tools]
+                        except Exception as e:
+                            logger.warning(f"Could not list tools for a server: {e}")
+                return json.dumps(namespaces, indent=2)
+
+            self.local_tools.append(list_my_capabilities)
+
             for params in Config.mcp_server_params_list:
                 if "url" in params:
                     logger.info(f"Connecting to HHTP MCP server at {params['url']}")

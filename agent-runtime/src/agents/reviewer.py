@@ -6,21 +6,21 @@ from openai.types.responses import ResponseTextDeltaEvent
 from src.utils import make_trace_id
 import logging
 from src.a2a.host import create_a2a_app
-from src.agents.cards import GENERATOR_CARD
+from src.agents.cards import REVIEWER_CARD
 
-##Rendered part
-from src.agents.schemas.generator_schema import GenerationPlan
-from src.generator.renderer import Renderer
+
+##Reviewer tools
+from src.agents.schemas.reviewer_schema import ReviewResult   # adjust path to where you put it
 from pathlib import Path
 import json
 
 logger = logging.getLogger(__name__)
 
 
-class GeneratorAgent:
-    """Single generator agent making MCP Tools."""
+class ReviewerAgent:
+    """Single reviewer agent reviewing generated code from the Generator."""
 
-    def __init__(self, name: str = "GeneratorAgent", model_name: str = "gpt-4.1-mini"):  ##gpt-4.1-mini gpt-5-mini
+    def __init__(self, name: str = "ReviewerAgent", model_name: str = "gpt-4.1-mini"):  ##gpt-4.1-mini gpt-5-mini
         self.name = name
         self.agent: Agent | None = None
         self.model_name = model_name
@@ -28,54 +28,47 @@ class GeneratorAgent:
         self.mcp_stack = AsyncExitStack()
         self.mcp_servers = None
         self.initialized = False
-        self.renderer = Renderer()
 
     async def handle_a2a_task(self, params: dict):
-        task = params.get("task")
-        if not task:
-            return "No task provided"
+        file_path = params.get("task")
+        if not file_path:
+            return ReviewResult(approved=False, summary="No file path provided").model_dump_json()
 
-        self.history = []   #Clean history each task
+        self.history = []   # stateless
 
-        result_json = ""
-        async for token in self.run(task):
-            result_json += token
-        
+        # 1. Read the generated file from the shared volume
+        path = Path(file_path)
+        if not path.exists():
+            return ReviewResult(approved=False, summary=f"File not found: {path}").model_dump_json()
+        if path.suffix != ".py":
+            return ReviewResult(approved=False, summary=f"Expected a .py file, got: {path.suffix}").model_dump_json()
+
+        code = path.read_text(encoding="utf-8")
+        if not code.strip():
+            return ReviewResult(approved=False, summary="File is empty.").model_dump_json()
+
+        # 2. Run the reviewer agent on the code
+        prompt = f"Review the following MCP server code.\nFile: {path.name}\n\n{code}"
+        raw = ""
+        async for delta in self.run(prompt):
+            raw += delta
+
+        # 3. Validate the agent's output against ReviewResult
         try:
-            plan = GenerationPlan.model_validate_json(result_json)
-            
-            if plan.clarification_questions:
-                return json.dumps({
-                    "status": "clarification_needed",
-                    "questions": plan.clarification_questions
-                })
-            
-            # Determine output directory (e.g., generated/<tech>)
-            output_dir = Path("generated") / plan.technology_lower
-            output_path = self.renderer.render(plan, output_dir)
-            
-            return json.dumps({
-                "status": "success",
-                "file_path": str(output_path),
-                "technology": plan.technology_pascal
-            })
-            
+            result = ReviewResult.model_validate_json(raw)
+            logger.info(f"Review of '{path.name}': approved={result.approved}, issues={len(result.issues)}")
+            return result.model_dump_json()
         except Exception as e:
-            logger.error(f"Failed to parse or render generation plan: {e}")
-            return json.dumps({
-                "status": "error",
-                "message": str(e),
-                "raw_result": result_json
-            })
-
+            logger.error(f"Reviewer produced invalid output: {e}")
+            return ReviewResult(approved=False,summary=f"Reviewer produced unparseable output: {e}").model_dump_json()
 
     def get_a2a_app(self):
-        return create_a2a_app(GENERATOR_CARD, self.handle_a2a_task)
+        return create_a2a_app(REVIEWER_CARD, self.handle_a2a_task)
 
     async def create_agent(self, mcp_servers) -> Agent:
         self.agent = Agent(
             name=self.name,
-            instructions=Templates.generator_agent(),
+            instructions=Templates.reviewer_agent(),
             model=Config.get_model(self.model_name),
             mcp_servers=mcp_servers,
         )
@@ -113,7 +106,7 @@ class GeneratorAgent:
         if self.mcp_servers is None:
             await self.mcp_stack.__aenter__()
             self.mcp_servers = []
-            for params in Config.generator_mcp_params_list:
+            for params in Config.reviewer_mcp_params_list:
                 if "url" in params:
                     logger.info(f"Connecting to HHTP MCP server at {params['url']}")
                     server = await self.mcp_stack.enter_async_context(

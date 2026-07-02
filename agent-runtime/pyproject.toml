@@ -9,8 +9,8 @@ dependencies = [
     "asyncua>=1.1.0",
     "agent-squad[all]>=1.0.2",
     "anthropic>=0.49.0",
-    "autogen-agentchat>=0.4.9.2",
-    "autogen-ext[grpc,mcp,ollama,openai]>=0.4.9.2",
+    "autogen-agentchat==0.7.5",
+    "autogen-ext[grpc,mcp,ollama,openai]==0.7.5",
     "bs4>=0.0.2",
     "gradio>=5.0",
     "httpx>=0.28.1",
@@ -48,9 +48,14 @@ dependencies = [
     "httpx>=0.27.0",
     "trafilatura>=1.12.0",
     "jinja2>=3.1.0",
+    "a2a-sdk>=1.0.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "grpcio>=1.70.0",
 ]
 
 [dependency-groups]
 dev = [
     "ipykernel>=6.29.5",
+    "pytest",
 ]

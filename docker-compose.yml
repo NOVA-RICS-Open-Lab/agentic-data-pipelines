@@ -153,12 +153,15 @@ services:
     restart: unless-stopped
     depends_on:
       - aasx-server
+      - orchestrator-mcp-service
     ports:
       - "8000:8000"
     networks:
       - agentic-net
     env_file:
       - .env
+    environment:
+      - A2A_ORCHESTRATOR_URL=http://orchestrator-mcp-service:8095
     volumes:
       - ./aasxs:/app/aasxs   
   aasx-mcp-service:
@@ -559,7 +562,7 @@ services:
     container_name: agent-runtime-researcher
     build: ./agent-runtime
     restart: unless-stopped
-    command: python -m src.ui.researcher_ui
+    command: python -m src.mcp.researcher.researcher_server
     ports:
       - "7000:7000"
     depends_on:
@@ -572,12 +575,13 @@ services:
   research-mcp-service:
     build: ./agent-runtime
     container_name: research-mcp-service
-    command: python -m src.mcp.researcher.researcher_server
+    command: python -u /app/a2a_server.py
     ports:
       - "8093:8093"
     env_file:
       - .env
     environment:
+      - AGENT_TYPE=researcher
       - MCP_CONNECTION_MODE=http
       - PORT=8093
     depends_on:
@@ -588,12 +592,13 @@ services:
   generator-mcp-service:
     build: ./agent-runtime
     container_name: generator-mcp-service
-    command: python -m src.mcp.generator.generator_server
+    command: python -u /app/a2a_server.py
     ports:
       - "8094:8094"
     env_file:
       - .env
     environment:
+      - AGENT_TYPE=generator
       - MCP_CONNECTION_MODE=http
       - PORT=8094
     volumes:
@@ -604,17 +609,37 @@ services:
   orchestrator-mcp-service:
     build: ./agent-runtime
     container_name: orchestrator-mcp-service
-    command: python -m src.mcp.orchestrator.orchestrator_server
+    command: python -u /app/a2a_server.py
     ports:
       - "8095:8095"
     env_file:
       - .env
     environment:
+      - AGENT_TYPE=orchestrator
       - MCP_CONNECTION_MODE=http
       - PORT=8095
+      - A2A_RESEARCHER_URL=http://research-mcp-service:8093
+      - A2A_GENERATOR_URL=http://generator-mcp-service:8094
+      - A2A_REVIEWER_URL=http://reviewer-mcp-service:8096
     depends_on:
       - research-mcp-service
       - generator-mcp-service
+      - reviewer-mcp-service
+    networks:
+      - agentic-net
+
+  reviewer-mcp-service:
+    build: ./agent-runtime
+    container_name: reviewer-mcp-service
+    command: python -u /app/a2a_server.py
+    ports:
+      - "8096:8096"
+    env_file:
+      - .env
+    environment:
+      - AGENT_TYPE=reviewer
+      - MCP_CONNECTION_MODE=http
+      - PORT=8096
     networks:
       - agentic-net
 
