@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class GeneratorAgent:
     """Single generator agent making MCP Tools."""
 
-    def __init__(self, name: str = "GeneratorAgent", model_name: str = "gpt-4.1-mini"):  ##gpt-4.1-mini gpt-5-mini
+    def __init__(self, name: str = "GeneratorAgent", model_name: str = "claude-opus-4-8"):  ##gpt-4.1-mini gpt-5-mini
         self.name = name
         self.agent: Agent | None = None
         self.model_name = model_name
@@ -167,11 +167,15 @@ class GeneratorAgent:
 
             assistant_text = ""
             async for event in stream.stream_events():
-                if event.type == "raw_response_event" and isinstance(
-                    event.data, ResponseTextDeltaEvent
-                ):
-                    assistant_text += event.data.delta
-                    yield event.data.delta  
+                # if event.type == "raw_response_event" and isinstance(
+                #     event.data, ResponseTextDeltaEvent
+                # ):
+                #     assistant_text += event.data.delta
+                #     yield event.data.delta  
+                pass
+            assistant_text = stream.final_output or ""
+            yield assistant_text
+            
 
             
             self.history.append({"role": "assistant", "content": assistant_text})

@@ -23,15 +23,12 @@ async def run(message, history):
         history = []
 
     history.append({"role": "user", "content": message})
+    history.append({"role": "assistant", "content": ""})  # placeholder once
     assistant_text = ""
 
     async for token in system.run(message):
         assistant_text += token
-        if len(history) == 0 or history[-1]["role"] != "assistant":
-            history.append({"role": "assistant", "content": assistant_text})
-        else:
-            history[-1]["content"] = assistant_text
-
+        history[-1]["content"] = assistant_text  # just update the last entry
         yield history, ""
 
 

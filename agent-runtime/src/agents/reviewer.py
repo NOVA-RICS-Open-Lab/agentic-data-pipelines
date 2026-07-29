@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class ReviewerAgent:
     """Single reviewer agent reviewing generated code from the Generator."""
 
-    def __init__(self, name: str = "ReviewerAgent", model_name: str = "gpt-4.1-mini"):  ##gpt-4.1-mini gpt-5-mini
+    def __init__(self, name: str = "ReviewerAgent", model_name: str = "gpt-5-mini"):  ##gpt-4.1-mini gpt-5-mini
         self.name = name
         self.agent: Agent | None = None
         self.model_name = model_name

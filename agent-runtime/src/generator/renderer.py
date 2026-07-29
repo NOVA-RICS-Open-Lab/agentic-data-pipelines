@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
+import textwrap
 from src.agents.schemas.generator_schema import GenerationPlan
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ class Renderer:
             keep_trailing_newline=True,
             undefined=StrictUndefined,
         )
+        self.env.filters["dedent"] = textwrap.dedent
         logger.info(f"Renderer initialized (templates_dir={templates_dir})")
 
     def render(self, plan: GenerationPlan, output_dir: Path) -> Path:

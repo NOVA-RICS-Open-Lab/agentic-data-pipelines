@@ -40,7 +40,7 @@ async def {{ tool.name }}({{ tool.params_signature }}) -> {{ tool.return_type }}
     """
 {{ tool.docstring|indent(4, first=True) }}
     """
-{{ tool.body|indent(4, first=True) }}
+{{ tool.body|dedent|indent(4, first=True) }}
 
 {% endfor %}
 

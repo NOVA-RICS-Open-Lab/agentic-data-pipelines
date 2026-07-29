@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
+import anthropic
 from agents import OpenAIChatCompletionsModel
 from mcp.server.fastmcp import FastMCP
 
@@ -17,6 +18,7 @@ class Config:
     NEO4J_USER=os.getenv("NEO4J_USER")
     NEO4J_PASSWORD=os.getenv("NEO4J_PASSWORD")
     OPENAI_API_KEY=os.getenv("OPENAI_API_KEY")
+    CLAUDE_API_KEY=os.getenv("CLAUDE_API_KEY")
     MCP_MODE = os.getenv("MCP_CONNECTION_MODE", "stdio").lower()
     MCP_HTTP_URL = os.getenv("MCP_HTTP_URL", "http://aasx-mcp-service:8080/mcp")
     
@@ -50,6 +52,8 @@ class Config:
     KAFKA_PORT = os.getenv("")
     
     OPENAI_CLIENT=AsyncOpenAI(api_key=OPENAI_API_KEY)
+    CLAUDE_CLIENT=AsyncOpenAI(api_key=CLAUDE_API_KEY, base_url="https://api.anthropic.com/v1/",)
+    print("CLAUDE key loaded:", bool(CLAUDE_API_KEY), "prefix:", (CLAUDE_API_KEY or "")[:7])
 
     mcp_server_params_list = []
     researcher_mcp_params_list = [{"url": MCP_RESEARCHER_URL}]
@@ -79,5 +83,7 @@ class Config:
     def get_model(model_name: str):
         if "gpt" in model_name:
             return OpenAIChatCompletionsModel(model=model_name, openai_client=Config.OPENAI_CLIENT)
+        if "claude" in model_name:
+            return OpenAIChatCompletionsModel(model=model_name, openai_client=Config.CLAUDE_CLIENT)
         else:
             return model_name
