@@ -136,6 +136,12 @@
         <p>
           The system follows a two-layer agentic architecture divided into an <strong>Agentic Pipeline Builder</strong> and an <strong>MCP Building Section</strong>.
         </p>
+        <figure class="image" style="margin: 1.5rem auto; max-width: 800px;">
+          <img src="static/images/multi_agent_architecture.png" alt="Two-layer agentic architecture: Agentic Pipeline Builder and MCP Building Section."/>
+          <figcaption class="has-text-centered" style="margin-top: 0.5rem;">
+            Fig. 1 - Two-layer agentic architecture.
+          </figcaption>
+        </figure>
         <ul>
           <li><strong>Layer 1 (Interaction &amp; Directing):</strong> The user interacts directly with the <strong>Agentic Pipeline Builder</strong>, which is responsible for interacting with the user and the AAS to build and deploy data pipelines, while also communicating with the <strong>Orchestrator</strong> inside the MCP building environment to build new MCP infrastructure.</li>
           <li><strong>Layer 2 (Execution &amp; Refinement):</strong> The <strong>Orchestrator</strong> manages dedicated sub-agents:

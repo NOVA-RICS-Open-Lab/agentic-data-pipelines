@@ -52,7 +52,7 @@ docker compose --profile http up -d
 
 ### 2. Agent Interaction
 
-Once started, open your browser at **`http://localhost:8000`** to interact with the Agentic Pipelines system.
+Once started, open your browser(Chrome is recommended) at **`http://localhost:8000`** to interact with the Agentic Pipelines system.
 
 ---
 
@@ -72,7 +72,7 @@ If you use or build on this work, please cite:
 
 ```bibtex
 @mastersthesis{miranda2026agentic,
-  author  = {Miranda, João and Pegado, António and Freitas, Nelson and Rocha, André and Barata, José},
+  author  = {Miranda, Joao and Pegado, Antonio and Freitas, Nelson and Rocha, Andre and Barata, Jose},
   title   = {Agentic AI for AAS-Based Data Pipeline Generation in Industry 4.0},
   school  = {NOVA School of Science and Technology},
   year    = {2026}
