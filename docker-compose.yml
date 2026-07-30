@@ -1,19 +1,4 @@
 services:
-  # aas-env:
-  #   container_name: aas-env
-  #   image:  docker.io/adminshellio/aas-env-blazor-for-demo:0.3.1.651-aasv3-alpha-latest     ##0.3.1.284-aasv3-alpha-latest  #0.3.1.651-aasv3-alpha-latest
-  #   restart: unless-stopped
-  #   ports:
-  #     - "5001:5001"
-  #   environment:
-  #     - Kestrel__Endpoints__Http__Url=http://*:5001
-  #   volumes:
-  #     - ./aasxs:/AasxServerBlazor/aasxs  ## ./aasxs_agent:/AasxServerBlazor/aasxs_agent - ./aasxs:/AasxServerBlazor/aasxs NOTA: Se o folder(aasxs_agent) estiver vazio é preciso correr o codigo com aasx no final e depois  
-  #     #- ./aasxs/database.db:/AasxServerBlazor/database.db
-  #   command: --no-security --rest --external-blazor http://localhost:5001 -with-db --edit  ## -with-db
-  #   networks:
-  #     - agentic-net
-
   aasx-server:
     image: eclipsebasyx/aas-environment:2.0.0-SNAPSHOT
     container_name: aasx-server
@@ -116,13 +101,13 @@ services:
     ports:
       - '5040:3000'
     environment:
-      AAS_REGISTRY_PATH: http://localhost:5010/shell-descriptors      # ← was 5020
-      SUBMODEL_REGISTRY_PATH: http://localhost:5020/submodel-descriptors  # ← was 5021
-      AAS_REPO_PATH: http://localhost:5051/shells                     # ← was 5020
-      SUBMODEL_REPO_PATH: http://localhost:5051/submodels             # ← was 5020
-      CD_REPO_PATH: http://localhost:5051/concept-descriptions        # ← was 5020
-      AAS_DISCOVERY_PATH: http://localhost:5030/lookup/shells         # ← correct
-      DASHBOARD_SERVICE_PATH: http://localhost:5060/api/elements      # ← was 5035
+      AAS_REGISTRY_PATH: http://localhost:5010/shell-descriptors      
+      SUBMODEL_REGISTRY_PATH: http://localhost:5020/submodel-descriptors  
+      AAS_REPO_PATH: http://localhost:5051/shells                     
+      SUBMODEL_REPO_PATH: http://localhost:5051/submodels             
+      CD_REPO_PATH: http://localhost:5051/concept-descriptions        
+      AAS_DISCOVERY_PATH: http://localhost:5030/lookup/shells         
+      DASHBOARD_SERVICE_PATH: http://localhost:5060/api/elements      
       PRIMARY_COLOR: '#144AF6'
     restart: always
     depends_on:
@@ -141,6 +126,8 @@ services:
     volumes:
       - ./basyx/aas-dashboard.yml:/application.yml
     restart: always
+    environment:
+      - DB_HOST=mongodb
     depends_on:
       mongodb:
         condition: service_healthy
@@ -208,134 +195,134 @@ services:
     networks:
       - agentic-net
 
-  # zookeeper:
-  #   image: confluentinc/cp-zookeeper:7.6.0
-  #   container_name: zookeeper
-  #   restart: unless-stopped
-  #   ports:
-  #     - "2181:2181"
-  #   environment:
-  #     ZOOKEEPER_CLIENT_PORT: 2181
-  #     ZOOKEEPER_TICK_TIME: 2000
-  #   healthcheck:
-  #     test: ["CMD", "nc", "-z", "localhost", "2181"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #   volumes:
-  #     - ./zookeeper/data:/var/lib/zookeeper/data
-  #     - ./zookeeper/logs:/var/lib/zookeeper/log
-  #   networks:
-  #     - agentic-net
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: zookeeper
+    restart: unless-stopped
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ./zookeeper/data:/var/lib/zookeeper/data
+      - ./zookeeper/logs:/var/lib/zookeeper/log
+    networks:
+      - agentic-net
 
 
-  # broker:
-  #   image: confluentinc/cp-kafka:7.6.0
-  #   container_name: broker
-  #   restart: unless-stopped
-  #   depends_on:
-  #     zookeeper:
-  #       condition: service_healthy
-  #   ports:
-  #     - "9092:9092"
-  #   environment:
-  #     KAFKA_BROKER_ID: 1
-  #     KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-  #     KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
-  #     KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:9092,PLAINTEXT_HOST://localhost:29092
-  #     KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-  #     KAFKA_LOG_DIRS: /var/lib/kafka/data           # ← explicit, matches your volume
-  #     KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-  #     KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-  #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-  #     KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-  #   healthcheck:
-  #     test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
-  #     interval: 15s
-  #     timeout: 10s
-  #     retries: 10          # ← more retries
-  #     start_period: 45s    # ← give Kafka time to fully start before counting failures
-  #   volumes:
-  #     - ./broker/data:/var/lib/kafka/data
-  #   networks:
-  #     - agentic-net
+  broker:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: broker
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LOG_DIRS: /var/lib/kafka/data          
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10          
+      start_period: 45s    
+    volumes:
+      - ./broker/data:/var/lib/kafka/data
+    networks:
+      - agentic-net
 
-  # schema-registry:
-  #   image: confluentinc/cp-schema-registry:7.6.0
-  #   container_name: schema-registry
-  #   restart: unless-stopped
-  #   depends_on:
-  #     broker:
-  #       condition: service_healthy          
-  #   ports:
-  #     - "8081:8081"
-  #   environment:
-  #     SCHEMA_REGISTRY_HOST_NAME: schema-registry
-  #     SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: broker:9092
-  #     SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8081/subjects"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #   networks:
-  #     - agentic-net
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.6.0
+    container_name: schema-registry
+    restart: unless-stopped
+    depends_on:
+      broker:
+        condition: service_healthy          
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: broker:9092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/subjects"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agentic-net
 
-  # ksqldb-server:
-  #   image: confluentinc/cp-ksqldb-server:7.6.0
-  #   container_name: ksqldb-server
-  #   restart: unless-stopped
-  #   depends_on:
-  #     broker:
-  #       condition: service_healthy
-  #     schema-registry:
-  #       condition: service_healthy          # <-- WAIT FOR SCHEMA REGISTRY
-  #   ports:
-  #     - "8088:8088"
-  #   environment:
-  #     KSQL_BOOTSTRAP_SERVERS: broker:9092
-  #     KSQL_KSQL_SCHEMA_REGISTRY_URL: http://schema-registry:8081
-  #     KSQL_LISTENERS: http://0.0.0.0:8088
-  #     KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: "true"
-  #     KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: "true"
-  #     KSQL_KSQL_SERVICE_ID: agentic_ksql_
-  #   volumes:
-  #     - ./ksqldb/data:/var/lib/kafka-streams
-  #   networks:
-  #     - agentic-net
+  ksqldb-server:
+    image: confluentinc/cp-ksqldb-server:7.6.0
+    container_name: ksqldb-server
+    restart: unless-stopped
+    depends_on:
+      broker:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy          
+    ports:
+      - "8088:8088"
+    environment:
+      KSQL_BOOTSTRAP_SERVERS: broker:9092
+      KSQL_KSQL_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      KSQL_LISTENERS: http://0.0.0.0:8088
+      KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: "true"
+      KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: "true"
+      KSQL_KSQL_SERVICE_ID: agentic_ksql_
+    volumes:
+      - ./ksqldb/data:/var/lib/kafka-streams
+    networks:
+      - agentic-net
 
-  # kafka-connect:
-  #   build: ./agent-runtime/src/mcp/kafka_connect
-  #   container_name: kafka-connect
-  #   restart: unless-stopped
-  #   depends_on:
-  #     broker:
-  #       condition: service_healthy
-  #     schema-registry:
-  #       condition: service_healthy         
-  #     mongodb:
-  #       condition: service_started
-  #   ports:
-  #     - "8083:8083"
-  #   environment:
-  #     CONNECT_BOOTSTRAP_SERVERS: broker:9092
-  #     CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
-  #     CONNECT_REST_PORT: 8083
-  #     CONNECT_GROUP_ID: agentic-connect-group
-  #     CONNECT_CONFIG_STORAGE_TOPIC: _connect-configs
-  #     CONNECT_OFFSET_STORAGE_TOPIC: _connect-offsets
-  #     CONNECT_STATUS_STORAGE_TOPIC: _connect-status
-  #     CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
-  #     CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
-  #     CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
-  #     CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"   ##my messages are json no need for this 
-  #     CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
-  #     CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-  #     CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
-  #     CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components
-  #   networks:
-  #     - agentic-net
+  kafka-connect:
+    build: ./agent-runtime/src/mcp/kafka_connect
+    container_name: kafka-connect
+    restart: unless-stopped
+    depends_on:
+      broker:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy         
+      mongodb:
+        condition: service_started
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: broker:9092
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: agentic-connect-group
+      CONNECT_CONFIG_STORAGE_TOPIC: _connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: _connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: _connect-status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"   ##my messages are json no need for this 
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components
+    networks:
+      - agentic-net
 
   mongodb:
     image: mongodb/mongodb-community-server:8.0-ubi9-slim  
@@ -377,25 +364,25 @@ services:
   #   networks:
   #     - agentic-net
 
-  # kafka-mcp-service:
-  #   profiles: ["http"]
-  #   build: ./agent-runtime
-  #   container_name: kafka-mcp-service
-  #   command: python -m src.mcp.kafka.kafka_server
-  #   ports:
-  #     - "8084:8084"
-  #   env_file:
-  #     - .env
-  #   environment:
-  #     - MCP_CONNECTION_MODE=http
-  #     - PORT=8084
-  #     - KAFKA_BOOTSTRAP_SERVERS=broker:9092
-  #     - KSQLDB_URL=http://ksqldb-server:8088
-  #   depends_on:
-  #     - broker
-  #     - ksqldb-server
-  #   networks:
-  #     - agentic-net
+  kafka-mcp-service:
+    profiles: ["http"]
+    build: ./agent-runtime
+    container_name: kafka-mcp-service
+    command: python -m src.mcp.kafka.kafka_server
+    ports:
+      - "8084:8084"
+    env_file:
+      - .env
+    environment:
+      - MCP_CONNECTION_MODE=http
+      - PORT=8084
+      - KAFKA_BOOTSTRAP_SERVERS=broker:9092
+      - KSQLDB_URL=http://ksqldb-server:8088
+    depends_on:
+      - broker
+      - ksqldb-server
+    networks:
+      - agentic-net
 
   mongo-mcp-service:
     profiles: ["http"]
@@ -413,7 +400,7 @@ services:
       - KAFKA_CONNECT_URL=http://kafka-connect:8083
     depends_on:
       - mongodb
-      # - kafka-connect
+      - kafka-connect
     networks:
       - agentic-net
 
@@ -452,8 +439,8 @@ services:
     restart: unless-stopped
     command: python src/mcp/opcua-kafka/opcua_kafka_bridge.py
     depends_on:
-      #broker:
-        #condition: service_healthy
+      broker:
+        condition: service_healthy
       kuka-robot:
         condition: service_started
       
@@ -640,6 +627,8 @@ services:
       - AGENT_TYPE=reviewer
       - MCP_CONNECTION_MODE=http
       - PORT=8096
+    volumes:
+      - ./agent-runtime/generated:/app/generated
     networks:
       - agentic-net
 
