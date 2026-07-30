@@ -66,18 +66,6 @@ Contributions are welcome! To propose a change:
 
 For larger changes, please open an issue first to discuss the direction. Bug reports and feature requests are also welcome via the [issue tracker](https://github.com/NOVA-RICS-Open-Lab/agentic-data-pipelines/issues).
 
-## Citation
-
-If you use or build on this work, please cite:
-
-```bibtex
-@mastersthesis{miranda2026agentic,
-  author  = {Miranda, Joao and Pegado, Antonio and Freitas, Nelson and Rocha, Andre and Barata, Jose},
-  title   = {Agentic AI for AAS-Based Data Pipeline Generation in Industry 4.0},
-  school  = {NOVA School of Science and Technology},
-  year    = {2026}
-}
-```
 
 ## License
 
