@@ -17,7 +17,7 @@ Industrial data pipelines are essential for transforming heterogeneous shop-floo
 
 The system follows a two-layer agentic architecture divided into two parts: an Agentic Pipeline Builder and an MCP Building Section.
 
-![Agentic Architecture](static/images/multi_agent_architecture.png)
+![Agentic Architecture](static/images/ArchitectureLAyers.png.png)
 
 * **Layer 1 (Interaction & Directing):** The user interacts directly with the **Agentic Pipeline Builder**, which is responsible for interacting with the user and the AAS to build and deploy data pipelines, while also communicating with the **Orchestrator** inside the MCP building environment to build new MCP infrastructure.
 * **Layer 2 (Execution & Refinement):** The **Orchestrator** manages dedicated sub-agents:
