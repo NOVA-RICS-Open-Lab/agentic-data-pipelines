@@ -3,18 +3,31 @@ from src.config import Templates, Config
 from contextlib import AsyncExitStack
 from agents.mcp import MCPServerStdio, MCPServerSse, MCPServerStreamableHttp # type: ignore
 from openai.types.responses import ResponseTextDeltaEvent # type: ignore
-from src.utils import make_trace_id
+from src.utils import make_trace_id, inject_verbatim_functions, inject_functions_to_implement
 from src.a2a.host import create_a2a_app
 from src.a2a.client import A2AClient
 from src.agents.cards import ORCHESTRATOR_CARD, RESEARCHER_CARD, GENERATOR_CARD, REVIEWER_CARD
 import logging
 import asyncio
+import json
 
 logger = logging.getLogger(__name__)
 
 
 class OrchestratorAgent:
     """Single orchestrator agent coordinating MCP Process Agents."""
+
+    # Hard per-task budgets. The orchestrator LLM is told (in its prompt) to wind
+    # down and emit an "unapproved" report once these are hit. This is the code
+    # backstop - in particular it stops the invalid_syntax -> generate -> invalid_syntax
+    # loop, which never calls review and so only trips the consecutive guard slowly.
+    MAX_TOTAL_CALLS = {
+        "research_technology": 3,
+        "clarify": 6,
+        "generate_mcp_server": 5,
+        "review_code": 5,
+    }
+    CONSECUTIVE_LIMIT = 6
 
     def __init__(self, name: str = "OrchestratorAgent", model_name: str = "gpt-4.1-mini"):  ##gpt-4.1-mini gpt-5-mini
         self.name = name
@@ -29,6 +42,12 @@ class OrchestratorAgent:
         self.researcher_client = A2AClient(Config.A2A_RESEARCHER_URL)
         self.generator_client = A2AClient(Config.A2A_GENERATOR_URL)
         self.reviewer_client = A2AClient(Config.A2A_REVIEWER_URL)
+
+        self.last_tool_called: str | None = None
+        self.consecutive_tool_calls = 0
+        self.tool_call_counts: dict[str, int] = {}
+        self.last_generate_result: dict | None = None
+        self.last_review_result: dict | None = None
 
     async def create_agent(self, mcp_servers) -> Agent:
         self.agent = Agent(
@@ -120,13 +139,22 @@ class OrchestratorAgent:
             # Add A2A Worker Proxy Tools
             @function_tool(
                 name_override="research_technology",
-                description_override="Search for technical context about a technology. While providing additional context (version, library to use)"
+                description_override=(
+                    "Search for technical context about a technology. While providing additional context "
+                    "(version, library to use). If your task included a VERBATIM_FUNCTIONS section, pass "
+                    "its exact contents through in verbatim_functions, unchanged - never paraphrase, "
+                    "shorten, or fold it into additional_information. Pass an empty string if there was none."
+                )
             )
-            async def research_technology(tech_name: str, additional_information: str) -> str:
+            async def research_technology(tech_name: str, additional_information: str, verbatim_functions: str, functions_to_implement: str) -> str:
                 error = self._check_tool_limit("research_technology")
                 if error: return error
 
-                params = {"task": f"Research the following technology: {tech_name}. Helpful information: {additional_information}"}
+                params = {
+                    "task": f"Research the following technology: {tech_name}. Helpful information: {additional_information}",
+                    "verbatim_functions": verbatim_functions,
+                    "functions_to_implement": functions_to_implement,
+                }
                 result = await self.researcher_client.call("execute_task", params)
                 # Researcher returns a string directly
                 return result
@@ -146,15 +174,32 @@ class OrchestratorAgent:
 
             @function_tool(
                 name_override="generate_mcp_server",
-                description_override="Generate an MCP server implementation from technology context."
+                description_override=(
+                    "Generate an MCP server implementation from technology context. If the TechnologyContext "
+                    "(or your original task) carries a verbatim_functions value, pass it through here "
+                    "unchanged in verbatim_functions - never fold it into context_json prose. Pass an empty string if there is none."
+                    
+                )
             )
-            async def generate_mcp_server(context_json: str) -> str:
+            async def generate_mcp_server(context_json: str, verbatim_functions: str, functions_to_implement: str) -> str:
                 error = self._check_tool_limit("generate_mcp_server")
                 if error: return error
 
-                params = {"task": f"Generate MCP server for: {context_json}"}
+                params = {
+                    "task": f"Generate MCP server for: {context_json}",
+                    "verbatim_functions": verbatim_functions,
+                    "functions_to_implement": functions_to_implement,
+                }
                 result = await self.generator_client.call("execute_task", params)
-                # Generator returns a string directly
+                # Generator returns a JSON string. Keep the last successful one so
+                # handle_a2a_task can hand the structured file_path/spec_path back to
+                # the SystemAgent (which needs it to raise the deploy candidate).
+                try:
+                    parsed = json.loads(result)
+                    if isinstance(parsed, dict) and parsed.get("status") == "success":
+                        self.last_generate_result = parsed
+                except (TypeError, json.JSONDecodeError):
+                    pass
                 return result
 
             @function_tool(
@@ -167,7 +212,13 @@ class OrchestratorAgent:
 
                 params = {"task": file_path}
                 result = await self.reviewer_client.call("execute_task", params)
-                # Reviewer returns a string directly
+                # Reviewer returns a JSON string; keep the last verdict.
+                try:
+                    parsed = json.loads(result)
+                    if isinstance(parsed, dict):
+                        self.last_review_result = parsed
+                except (TypeError, json.JSONDecodeError):
+                    pass
                 return result
 
             self.local_tools.extend([
@@ -178,16 +229,43 @@ class OrchestratorAgent:
             ])
 
     def _check_tool_limit(self, tool_name: str) -> str | None:
-        """Helper to prevent infinite tool loops."""
+        """Backstop against infinite worker loops. Two independent limits, both
+        reset per task in run():
+          * a per-task TOTAL cap per tool (MAX_TOTAL_CALLS) - catches the
+            invalid_syntax -> generate -> invalid_syntax loop that never reaches
+            review and so trips the consecutive guard only slowly;
+          * a consecutive-identical-call cap (CONSECUTIVE_LIMIT) - catches a tight
+            spin on a single tool.
+        Both return a message the orchestrator LLM is expected to act on this turn.
+        """
+        self.tool_call_counts[tool_name] = self.tool_call_counts.get(tool_name, 0) + 1
+        cap = self.MAX_TOTAL_CALLS.get(tool_name)
+        if cap is not None and self.tool_call_counts[tool_name] > cap:
+            logger.warning(
+                f"Budget exhausted: {tool_name} called {self.tool_call_counts[tool_name]} times (cap {cap})."
+            )
+            return (
+                f"BUDGET EXHAUSTED: '{tool_name}' has run {self.tool_call_counts[tool_name]} times, past its "
+                f"per-task limit of {cap}. STOP now - do NOT call generate_mcp_server, review_code or "
+                f"research_technology again. Emit your terminal report this turn with status \"unapproved\": "
+                f"include the most recent file_path (if any), the outstanding reviewer issues or syntax error, "
+                f"and how many rounds were used."
+            )
+
         if getattr(self, "last_tool_called", None) == tool_name:
             self.consecutive_tool_calls += 1
         else:
             self.last_tool_called = tool_name
             self.consecutive_tool_calls = 1
-            
-        if self.consecutive_tool_calls >= 10:
-            logger.warning(f"Guardrail triggered: {tool_name} called {self.consecutive_tool_calls} times.")
-            return f"GUARDRAIL ERROR: You have called '{tool_name}' {self.consecutive_tool_calls} times consecutively. This indicates an infinite loop. ABORT YOUR CURRENT TASK IMMEDIATELY AND REPORT FAILURE TO THE USER."
+
+        if self.consecutive_tool_calls >= self.CONSECUTIVE_LIMIT:
+            logger.warning(
+                f"Guardrail triggered: {tool_name} called {self.consecutive_tool_calls}x consecutively."
+            )
+            return (
+                f"GUARDRAIL ERROR: '{tool_name}' called {self.consecutive_tool_calls} times in a row - this is "
+                f"a loop. ABORT the current task and report status \"failed\": which step looped, and why."
+            )
         return None
 
     async def handle_a2a_task(self, params: dict):
@@ -195,12 +273,34 @@ class OrchestratorAgent:
         task = params.get("task")
         if not task:
             return "No task provided"
-        
-        result = ""
+
+        task = inject_verbatim_functions(task, params.get("verbatim_functions") or "")
+        task = inject_functions_to_implement(task, params.get("functions_to_implement") or "")
+
+        report = ""
         async for chunk in self.run(task):
-            result += chunk
-        
-        return result
+            report += chunk
+
+        # If a file was generated, return a structured envelope so the caller
+        # (SystemAgent) can raise a deploy candidate. The LLM's prose report is
+        # kept under "report" for the caller to relay. When nothing was generated
+        # (failure before generation) fall back to the prose alone.
+        gen = self.last_generate_result
+        if gen and gen.get("file_path"):
+            approved = bool(self.last_review_result and self.last_review_result.get("approved"))
+            return json.dumps({
+                "status": "success" if approved else "unapproved",
+                "approved": approved,
+                "file_path": gen.get("file_path"),
+                "spec_path": gen.get("spec_path"),
+                "technology": gen.get("technology"),
+                "lint_findings": gen.get("lint_findings", []),
+                "uncertainties": gen.get("uncertainties", []),
+                "reviewer_notes": (self.last_review_result or {}).get("notes_for_human", []),
+                "report": report,
+            })
+
+        return report
 
     def get_a2a_app(self):
         """Return a FastAPI app for A2A communication."""
@@ -210,6 +310,9 @@ class OrchestratorAgent:
         # Reset tool tracking per task run
         self.last_tool_called = None
         self.consecutive_tool_calls = 0
+        self.tool_call_counts = {}
+        self.last_generate_result = None
+        self.last_review_result = None
 
         trace_name = f"{self.name}-working"
         trace_id = make_trace_id(f"{self.name.lower()}")

@@ -10,7 +10,7 @@ class A2AClient:
         self.base_url = base_url
 
     async def call(self, method: str, params: dict) -> Any:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(1200.0)) as client:
             request = JSONRPCRequest(method=method, params=params)
             
             logger.info(f"A2A OUT -> {self.base_url}/a2a/rpc | Method: {method} | ID: {request.id}")

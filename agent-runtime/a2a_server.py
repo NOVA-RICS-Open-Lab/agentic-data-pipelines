@@ -15,7 +15,7 @@ def get_mcp_server(agent_type: str, agent):
     """Creates a legacy MCP server for the agent and adds A2A endpoints."""
     mcp = FastMCP(agent_type.capitalize())
 
-    # --- Legacy MCP Tools ---
+
     if agent_type == "orchestrator":
         @mcp.tool()
         async def request_tool_build(technology_name: str) -> str:
@@ -55,8 +55,7 @@ def get_mcp_server(agent_type: str, agent):
                 result_json += token
             return result_json
 
-    # --- A2A Protocol Endpoints (JSON-RPC over HTTP) ---
-    # We use custom_route to expose A2A endpoints on the same port
+    # A2A Protocol Endpoints (JSON-RPC over HTTP)
     
     @mcp.custom_route("/a2a/info", methods=["GET"])
     async def a2a_info(request: Request):
@@ -78,7 +77,6 @@ def get_mcp_server(agent_type: str, agent):
         logger.info(f"A2A RECV <- RPC Method: {rpc_request.method} | ID: {rpc_request.id}")
         
         # Call the agent's task handler
-        # All agents now have a handle_a2a_task method from previous migration
         result = await agent.handle_a2a_task(rpc_request.params)
         
         response = JSONRPCResponse(result=result, id=rpc_request.id)

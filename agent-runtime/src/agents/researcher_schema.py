@@ -27,3 +27,17 @@ class TechnologyContext(BaseModel):
     idioms_and_gotchas: list[str]
     sources_consulted: list[str] = Field(description="URLs the agent actually fetched")
     confidence_notes: str = Field(description="Anything uncertain, contradictory, or assumed")
+    verbatim_functions: str = Field(
+        default="",
+        description="Verbatim AAS code block(s) supplied by the caller inside a "
+                    "VERBATIM_FUNCTIONS section, copied through EXACTLY as given. "
+                    "Never summarize, research, or alter this - it is not a research "
+                    "target, just a passthrough. Empty string if the caller supplied none."
+    )
+    functions_to_implement: str = Field(
+        default="",
+        description="The FunctionsToImplement specifications supplied by the caller, "
+                    "copied through EXACTLY as given, one 'Name: Purpose' per line. "
+                    "Never infer, rename, merge or extend  these - it is a "
+                    "passthrough. Empty string if the caller supplied none.",
+    )

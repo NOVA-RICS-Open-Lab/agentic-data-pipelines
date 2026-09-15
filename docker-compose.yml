@@ -1,6 +1,6 @@
 services:
   aasx-server:
-    image: eclipsebasyx/aas-environment:2.0.0-SNAPSHOT
+    image: eclipsebasyx/aas-environment:2.0.0-milestone-11
     container_name: aasx-server
     environment:
       - SERVER_PORT=5001
@@ -30,12 +30,13 @@ services:
       - agentic-net
 
   aas-registry:
-    image: eclipsebasyx/aas-registry-log-mongodb:2.0.0-SNAPSHOT
+    image: eclipsebasyx/aas-registry-log-mongodb:2.0.0-milestone-11
     container_name: aas-registry
     ports:
       - '5010:5010'
     environment:
       - SERVER_PORT=5010
+      - SPRING_DATA_MONGODB_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:27017/?authSource=admin
     env_file:
     - .env
     volumes:
@@ -54,7 +55,7 @@ services:
       - agentic-net
 
   aas-sm-registry:
-    image: eclipsebasyx/submodel-registry-log-mongodb:2.0.0-SNAPSHOT
+    image: eclipsebasyx/submodel-registry-log-mongodb:2.0.0-milestone-11
     container_name: aas-sm-registry
     ports:
       - '5020:5020'
@@ -62,6 +63,7 @@ services:
     - .env
     environment:
       - SERVER_PORT=5020
+      - SPRING_DATA_MONGODB_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:27017/?authSource=admin
     volumes:
       - ./basyx/sm-registry.yml:/workspace/config/application.yml
     restart: always
@@ -78,7 +80,7 @@ services:
       - agentic-net
 
   aas-discovery:
-    image: eclipsebasyx/aas-discovery:2.0.0-SNAPSHOT
+    image: eclipsebasyx/aas-discovery:2.0.0-milestone-11
     container_name: aas-discovery
     env_file:
       - .env
@@ -96,7 +98,7 @@ services:
       - agentic-net
   
   aas-web-ui:
-    image: eclipsebasyx/aas-gui:SNAPSHOT
+    image: eclipsebasyx/aas-gui:v2-260526
     container_name: aas-web-ui
     ports:
       - '5040:3000'
@@ -149,8 +151,10 @@ services:
       - .env
     environment:
       - A2A_ORCHESTRATOR_URL=http://orchestrator-mcp-service:8095
+      - DOCKER_MCP_BASE_URL=http://docker-mcp-service:8087
     volumes:
-      - ./aasxs:/app/aasxs   
+      - ./aasxs:/app/aasxs
+      - ./agent-runtime/generated:/app/generated:ro
   aasx-mcp-service:
     profiles: ["http"]
     build: ./agent-runtime
@@ -343,6 +347,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 90s
     networks:
       - agentic-net
 
@@ -364,25 +369,25 @@ services:
   #   networks:
   #     - agentic-net
 
-  kafka-mcp-service:
-    profiles: ["http"]
-    build: ./agent-runtime
-    container_name: kafka-mcp-service
-    command: python -m src.mcp.kafka.kafka_server
-    ports:
-      - "8084:8084"
-    env_file:
-      - .env
-    environment:
-      - MCP_CONNECTION_MODE=http
-      - PORT=8084
-      - KAFKA_BOOTSTRAP_SERVERS=broker:9092
-      - KSQLDB_URL=http://ksqldb-server:8088
-    depends_on:
-      - broker
-      - ksqldb-server
-    networks:
-      - agentic-net
+  # kafka-mcp-service:
+  #   profiles: ["http"]
+  #   build: ./agent-runtime
+  #   container_name: kafka-mcp-service
+  #   command: python -m src.mcp.kafka.kafka_server
+  #   ports:
+  #     - "8084:8084"
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - MCP_CONNECTION_MODE=http
+  #     - PORT=8084
+  #     - KAFKA_BOOTSTRAP_SERVERS=broker:9092
+  #     - KSQLDB_URL=http://ksqldb-server:8088
+  #   depends_on:
+  #     - broker
+  #     - ksqldb-server
+  #   networks:
+  #     - agentic-net
 
   mongo-mcp-service:
     profiles: ["http"]
@@ -427,9 +432,11 @@ services:
       - MCP_CONNECTION_MODE=http
       - PORT=8087
       - COMPOSE_PROJECT_NAME=agentic-data-pipelines
+      - COMPOSE_FILE=/workspace/docker-compose.yml
+      - REPO_ROOT=/workspace
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./docker-compose.yml:/app/docker-compose.yml
+      - .:/workspace
     networks:
       - agentic-net
 
@@ -448,13 +455,13 @@ services:
       - url=opc.tcp://kuka-robot:4849
       - namespace=http://fct.unl.pt/kuka_robot/
       - bootstrap_server=broker:9092
-      - topic=opcua.kuka.raw
+      - topic=opcua.kuka_robot.raw
       - folder=Kuka_Robot
     networks:
       - agentic-net
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.1.3
     container_name: grafana
     restart: unless-stopped
     env_file:
@@ -632,7 +639,29 @@ services:
     networks:
       - agentic-net
 
+# ===== AUTO-DEPLOYED MCP SERVERS =====
+  kafka_confluent-mcp-service:
+    build: ./agent-runtime
+    container_name: kafka_confluent-mcp-service
+    command: python -m src.mcp.kafka_confluent.kafka_confluent_server
+    ports:
+      - "9100:9100"
+    env_file:
+      - .env
+    environment:
+      - MCP_CONNECTION_MODE=http
+      - KAFKA_CONFLUENT_MCP_PORT=9100
+    depends_on:
+      - broker
+      - ksqldb-server
+    networks:
+      - agentic-net
+
+
 networks:
   agentic-net:
     name: agentic-net
     driver: bridge
+
+
+

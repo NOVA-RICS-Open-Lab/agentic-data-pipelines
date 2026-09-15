@@ -3,7 +3,7 @@ from src.config import Templates, Config
 from contextlib import AsyncExitStack
 from agents.mcp import MCPServerStreamableHttp
 from openai.types.responses import ResponseTextDeltaEvent
-from src.utils import make_trace_id
+from src.utils import make_trace_id, inject_verbatim_functions, inject_functions_to_implement
 import logging
 from src.agents.researcher_schema import TechnologyContext
 from src.a2a.host import create_a2a_app
@@ -29,6 +29,9 @@ class ResearcherAgent:
             return "No task provided"
 
         self.history = []   #Clean history each task
+
+        task = inject_verbatim_functions(task, params.get("verbatim_functions") or "")
+        task = inject_functions_to_implement(task, params.get("functions_to_implement") or "")
 
         result = ""
         async for delta in self.run(task):

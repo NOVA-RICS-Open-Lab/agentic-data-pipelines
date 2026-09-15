@@ -47,6 +47,20 @@ class ReviewerAgent:
         if not code.strip():
             return ReviewResult(approved=False, summary="File is empty.").model_dump_json()
 
+        spec_block = ""
+        spec_path = path.parent / "spec.json"
+        if spec_path.exists():
+            try:
+                spec = json.loads(spec_path.read_text(encoding="utf-8"))
+                spec_block = (
+                    "\nSPECIFICATION\n"
+                    + json.dumps(spec, indent=2)
+                    + "\nEND SPECIFICATION"
+                )
+                logger.info(f"Loaded spec.json for '{path.name}'")
+            except (OSError, json.JSONDecodeError) as e:
+                logger.warning(f"Could not read spec.json next to {path.name}: {e}")
+
         # 2. Run the reviewer agent on the code
         prompt = f"Review the following MCP server code.\nFile: {path.name}\n\n{code}"
         raw = ""

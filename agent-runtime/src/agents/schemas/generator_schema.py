@@ -74,3 +74,16 @@ class GenerationPlan(BaseModel):
         default_factory=list,
         description="Anything the agent was unsure about, couldn't verify, or had to assume."
     )
+    verbatim_functions: list[str] = Field(
+        default_factory=list,
+        description="Names of every tool, helper and constant reproduced verbatim from a "
+                    "[VERBATIM FUNCTION] block in the input. The Reviewer uses this to avoid "
+                    "raising issues you are not permitted to fix — omitting a name causes an "
+                    "unfixable review rejection loop."
+    )
+    required_capabilities: list[str] = Field(
+        default_factory=list,
+        description="Each leaf capability the input specification asked this tool to expose, "
+                    "echoed back verbatim. The Reviewer checks each one against the tools you "
+                    "produced. Leave empty only if the input declared no capability list."
+    )

@@ -146,7 +146,7 @@ async def create_kafka_sink(
     Connect a Kafka topic to a MongoDB collection via Kafka Connect.
     Messages from the topic are continuously inserted as documents automatically.
     Always point sinks at processed topics, not raw ones.
-    The collection must exist before calling this — call create_collection first.
+    The collection must exist before calling this.
 
     topic:      Kafka topic to consume from  e.g. 'opcua.kuka.processed'
     database:   target MongoDB database      e.g. 'kuka'

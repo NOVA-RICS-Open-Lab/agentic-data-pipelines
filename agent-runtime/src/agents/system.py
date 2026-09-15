@@ -5,6 +5,7 @@ from agents.mcp import MCPServerStdio, MCPServerSse, MCPServerStreamableHttp
 from src.a2a.client import A2AClient
 from openai.types.responses import ResponseTextDeltaEvent
 from src.utils import make_trace_id
+from pathlib import Path
 import logging
 import json
 
@@ -72,10 +73,20 @@ class SystemAgent:
             # Local A2A Orchestrator Proxy Tool
             @function_tool(
                 name_override="request_tool_build",
-                description_override="Coordinates the construction of a new MCP server tool for the given technology. While also providing additional context from the AAS"
+                description_override=(
+                    "Coordinates the construction of a new MCP server tool for the given technology. "
+                    "additional_context carries the narrative capability spec and DeploymentServices topology. "
+                    "verbatim_functions carries ONLY the [VERBATIM FUNCTION: <name>] ... [END VERBATIM] "
+                    "blocks transcribed from DesignPrinciples - pass them here UNCHANGED, never folded "
+                    "into additional_context. Pass an empty string if there are none."
+                )
             )
-            async def request_tool_build(technology_name: str, additional_context: str) -> str:
-                params = {"task": f"Build a tool for the following technology: {technology_name}. While keeping in mind the additional context provided by the AAS: {additional_context}"}
+            async def request_tool_build(technology_name: str, additional_context: str, verbatim_functions: str, functions_to_implement: str) -> str:
+                params = {
+                    "task": f"Build a tool for the following technology: {technology_name}. While keeping in mind the additional context provided by the AAS: {additional_context}",
+                    "verbatim_functions": verbatim_functions,
+                    "functions_to_implement": functions_to_implement,
+                }
                 return await self.orchestrator_client.call("execute_task", params)
 
             self.local_tools.append(request_tool_build)
@@ -152,12 +163,66 @@ class SystemAgent:
             )
 
             assistant_text = ""
+            pending_calls: dict[str, str] = {}  # call_id -> tool name, for matching tool_called -> tool_output
+
             async for event in stream.stream_events():
                 if event.type == "raw_response_event" and isinstance(
                     event.data, ResponseTextDeltaEvent
                 ):
                     assistant_text += event.data.delta
-                    yield event.data.delta  # streaming per token
+                    yield {"type": "token", "text": event.data.delta}  # streaming per token
+
+                elif event.type == "run_item_stream_event":
+                    if event.name == "tool_called":
+                        raw = event.item.raw_item
+                        call_id = getattr(raw, "call_id", None)
+                        tool_name = getattr(raw, "name", None)
+                        if call_id and tool_name:
+                            pending_calls[call_id] = tool_name
+
+                    elif event.name == "tool_output":
+                        raw = event.item.raw_item
+                        call_id = raw.get("call_id") if isinstance(raw, dict) else getattr(raw, "call_id", None)
+                        tool_name = pending_calls.pop(call_id, None)
+                        if tool_name == "request_tool_build":
+                            candidate = self._deploy_candidate_from_output(event.item.output)
+                            if candidate is not None:
+                                yield candidate
 
             # append assistant response to history
             self.history.append({"role": "assistant", "content": assistant_text})
+
+    @staticmethod
+    def _deploy_candidate_from_output(output) -> dict | None:
+        """Turn a successful request_tool_build tool result into a deploy_candidate event.
+
+        The tool's own JSON output is the source of truth here - nothing is
+        re-derived by scanning the filesystem. `spec_path` is read only because
+        the tool call itself told us exactly where to look.
+        """
+        try:
+            data = json.loads(output) if isinstance(output, str) else output
+        except (TypeError, json.JSONDecodeError):
+            return None
+
+        if not isinstance(data, dict) or data.get("status") not in ("success", "approved"):
+            return None
+
+        tools = []
+        spec_path = data.get("spec_path")
+        if spec_path:
+            try:
+                spec = json.loads(Path(spec_path).read_text(encoding="utf-8"))
+                tools = spec.get("declared_tools", [])
+            except (OSError, json.JSONDecodeError) as e:
+                logger.warning(f"Could not read spec for deploy candidate: {e}")
+
+        return {
+            "type": "deploy_candidate",
+            "technology": data.get("technology"),
+            "file_path": data.get("file_path"),
+            "spec_path": spec_path,
+            "tools": tools,
+            "lint_findings": data.get("lint_findings", []),
+            "uncertainties": data.get("uncertainties", []),
+        }

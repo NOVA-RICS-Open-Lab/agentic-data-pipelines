@@ -8,6 +8,7 @@ COPY pyproject.toml .
 RUN pip install --no-cache-dir .
 
 COPY src ./src
+COPY a2a_server.py .
 
 ENV PYTHONPATH=/app
 

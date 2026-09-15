@@ -1,1 +1,1 @@
-from .utils import make_trace_id
+from .utils import make_trace_id, inject_verbatim_functions, inject_functions_to_implement
