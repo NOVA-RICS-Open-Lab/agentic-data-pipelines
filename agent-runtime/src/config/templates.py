@@ -33,8 +33,8 @@ class Templates:
             - Never delete a submodel belonging to DataPipelineTemplate under any circumstances.
     
             DataPipelineTemplate Structure:
-            - Collection: starting point; defines the data provider, data points, and communication protocol.
-            - Integration (optional): bridges incompatible protocols between Collection and PreProcess.
+            - Extraction: starting point; defines the data provider, data points, and communication protocol.
+            - Integration (optional): bridges incompatible protocols between Extraction and PreProcess.
             - PreProcess: defines the pre-processing layer and its actions.
             - Processing (optional): further stream / stateful processing that runs AFTER
               PreProcess and BEFORE Storage. It is never a post-storage step.
@@ -70,6 +70,14 @@ class Templates:
                 AAS V3 forbids two siblings in a collection sharing an idShort, and BaSyx
                 silently drops the duplicates — which is how a populated Parameters collection
                 ends up empty on the server.
+                A child with NO idShort at all is just as broken as a duplicate one — the
+                server and viewer cannot resolve it, and it surfaces as a nameless, unopenable
+                node ("Submodel not found" in AAS Studio). Never emit a bare
+                {"modelType": "SubmodelElementCollection", "value": [...]} as a repeated child.
+                  WRONG: {"modelType": "SubmodelElementCollection", "value": [...]}
+                  RIGHT: {"idShort": "Parameter_Definition_01", "modelType": "SubmodelElementCollection", "value": [...]}
+                Omitting idShort is valid ONLY for items inside an actual SubmodelElementList
+                container — never inside a SubmodelElementCollection.
               Read the template's modelType for the repeat and do NOT guess between the two.
 
             2. Before submitting any submodel or shell payload, always display the full JSON to the user
@@ -81,10 +89,10 @@ class Templates:
             - Fields requiring user decisions → leave empty and list them explicitly.
     
             4. Pipeline build order is mandatory:
-            Collection → Integration (if needed) → PreProcess → Processing (if needed) → Storage → Utilization (if needed).
+            Extraction → Integration (if needed) → PreProcess → Processing (if needed) → Storage → Utilization (if needed).
             Storage is the sink and always comes last before Utilization. Processing, when present,
             runs before Storage — never after it.
-            Collection → PreProcess only if communication protocols are compatible.
+            Extraction → PreProcess only if communication protocols are compatible.
     
             5. Before deleting any submodel as an orphan, verify it is not linked to DataPipelineTemplate
             by calling get_submodels_refs on the DataPipelineTemplate shell first.
@@ -92,7 +100,7 @@ class Templates:
             6. Every stage submodel has an AAS_Source and an AAS_Destination. BOTH name a
             technology/asset AAS — never another pipeline-stage submodel.
             - AAS_Source: the AAS of the technology whose tools actually perform THIS stage.
-              Collection → the data-producing asset (e.g. Kuka_Robot, whose OPC-UA server exposes
+              Extraction → the data-producing asset (e.g. Kuka_Robot, whose OPC-UA server exposes
               the data). Integration → the bridge/middleware AAS doing the protocol conversion
               (e.g. OpcuaKafkaBridge). PreProcess / Processing → the engine that runs the
               transforms (e.g. Apache_Kafka). Storage → the store being written to.
@@ -104,8 +112,8 @@ class Templates:
             7. Link each pipeline submodel to the pipeline shell right after creating it, before
             moving on to the next stage. Do not leave linking until the end.
 
-            8. COLLECTION.Parameters — one entry per data point the SOURCE asset exposes:
-            - The Collection stage records what the source asset offers for ingestion. Read it
+            8. EXTRACTION.Parameters — one entry per data point the SOURCE asset exposes:
+            - The Extraction stage records what the source asset offers for ingestion. Read it
               from that asset's interface-description submodel (IDTA AssetInterfacesDescription /
               W3C WoT): the interface collection → InteractionMetadata → properties. Each child
               collection under `properties` is one data point. This shape is protocol-agnostic —
@@ -155,8 +163,8 @@ class Templates:
             - save_aas_changes() must be called after every mutation. A write task is not complete without saving.
             - After every write, read back the affected resource and confirm the change before reporting success.
             - idShort values are globally unique on the server. DataPipelineTemplate occupies:
-            Collection, Integration, PreProcess, Processing, Storage, Utilization.
-            Always append "_XXX" (e.g. _001) to avoid conflicts: Collection_001, PreProcess_001, etc.
+            Extraction, Integration, PreProcess, Processing, Storage, Utilization.
+            Always append "_XXX" (e.g. _001) to avoid conflicts: Extraction_001, PreProcess_001, etc.
     
             ERROR HANDLING:
             - Diagnose and resolve errors autonomously before involving the user.
@@ -193,7 +201,7 @@ class Templates:
 
             8. deploy_processor operates between two already-existing Kafka topics and hardcodes the
             message schema (source_type, asset_id, timestamp, quality, value, unit). It takes no schema
-            argument. Never derive a schema from Collection submodel parameters — those are OPC-UA node
+            argument. Never derive a schema from Extraction submodel parameters — those are OPC-UA node
             definitions, not Kafka message fields.
 
             10. Use correct Docker container hostnames for all services:

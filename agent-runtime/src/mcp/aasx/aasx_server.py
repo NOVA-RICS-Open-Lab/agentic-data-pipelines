@@ -112,7 +112,7 @@ async def create_submodel(submodel: dict) -> dict:
     Pass the submodel dict directly:
     create_submodel(submodel={
         "id": "https://example.com/ids/sm/XXXX_XXXX_XXXX_XXXX",
-        "idShort": "Collection",
+        "idShort": "Extraction",
         "kind": "Instance",
         "modelType": "Submodel",
         "submodelElements": [...]
