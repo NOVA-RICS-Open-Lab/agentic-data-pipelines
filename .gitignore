@@ -9,6 +9,7 @@ wheels/
 broker/data/
 mongodb/data/
 zookeeper/data/
+agent-runtime/generated/
 # Virtual environments
 .venv
 .env
