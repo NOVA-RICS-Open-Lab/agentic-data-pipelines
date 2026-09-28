@@ -241,8 +241,8 @@ class Templates:
             TOOL CONSTRUCTION & EXTENSIBILITY:
             - If you detect a capability gap (an AAS asset exists but you lack a corresponding operational MCP tool domain) or if a user explicitly commands you to act on a technology you cannot programmatically control, you must request the construction of a new MCP server.
 
-            DESIGN PRINCIPLES SUBMODEL (READ THIS FIRST WHEN BUILDING A TOOL):
-            - You MUST transmit the DesignPrinciples submodel FAITHFULLY AND IN FULL, but NOT
+            DEPLOYMENT SPECIFICATION SUBMODEL (READ THIS FIRST WHEN BUILDING A TOOL):
+            - You MUST transmit the DeploymentSpecification submodel FAITHFULLY AND IN FULL, but NOT
               inside additional_context. Verbatim code goes in the separate verbatim_functions
               argument described below - keeping it separate is what stops it getting diluted
               or summarized alongside the narrative context.
@@ -261,7 +261,7 @@ class Templates:
               truncated, say exactly which KeyFunctions entry is affected and stop; that is a
               defect in the AAS for the user to fix, not something to work around.
 
-            - DesignPrinciples contains TWO function collections and they are handled differently:
+            - DeploymentSpecification contains TWO function collections and they are handled differently:
               * KeyFunctions entries have a 'Code' property. These are already implemented.
                 Wrap each one in [VERBATIM FUNCTION] markers as described above.
               * FunctionsToImplement entries have NO 'Code' property. These are specifications
@@ -281,7 +281,7 @@ class Templates:
                 Do NOT put [VERBATIM FUNCTION] blocks in here.
               * verbatim_functions: every [VERBATIM FUNCTION] ... [END VERBATIM] block you wrapped
                 above, concatenated together, and nothing else. Pass an empty string "" if
-                DesignPrinciples had no KeyFunctions to transcribe. This argument exists
+                DeploymentSpecification had no KeyFunctions to transcribe. This argument exists
                 specifically so verbatim code travels to the Generator unchanged instead of
                 being folded into prose - never merge its contents into additional_context.
 
@@ -463,7 +463,7 @@ class Templates:
             INPUT:
             - A TechnologyContext object describing the technology: its Python client library,
               main operations, connection config, idioms, and code examples.
-            - Optionally a capability specification and DesignPrinciples content.
+            - Optionally a capability specification and DeploymentSpecification content.
             - On a retry, reviewer issues and/or a syntax or lint error from a previous attempt.
             - Verbatim code may reach you two ways - both mean the same thing: either inside
               TechnologyContext's own "verbatim_functions" field, or as a
@@ -504,7 +504,7 @@ class Templates:
               Writing NEW code is for two things, both allowed and expected: (a) the tools named
               in FUNCTIONS TO IMPLEMENT, and (b) private helpers / constants that a verbatim or
               a to-implement tool needs in order to run.
-            - Verbatim code and the DesignPrinciples Constraints OVERRIDE your general
+            - Verbatim code and the DeploymentSpecification Constraints OVERRIDE your general
               guidelines if they ever conflict (including hostname/config guidance).
             - Do NOT report a defect you notice inside a verbatim block as a clarification
               question. Record it in 'uncertainties' and reproduce the block unchanged.

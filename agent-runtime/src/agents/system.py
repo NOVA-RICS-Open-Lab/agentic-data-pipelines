@@ -77,7 +77,7 @@ class SystemAgent:
                     "Coordinates the construction of a new MCP server tool for the given technology. "
                     "additional_context carries the narrative capability spec and DeploymentServices topology. "
                     "verbatim_functions carries ONLY the [VERBATIM FUNCTION: <name>] ... [END VERBATIM] "
-                    "blocks transcribed from DesignPrinciples - pass them here UNCHANGED, never folded "
+                    "blocks transcribed from DeploymentSpecification - pass them here UNCHANGED, never folded "
                     "into additional_context. Pass an empty string if there are none."
                 )
             )

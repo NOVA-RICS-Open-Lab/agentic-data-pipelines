@@ -51,7 +51,7 @@ class ReviewResult(BaseModel):
         default_factory=list,
         description="Findings the Generator CANNOT act on — chiefly real defects "
                     "inside verbatim blocks, which must be fixed in the source "
-                    "DesignPrinciples submodel rather than in generated code. "
+                    "DeploymentSpecification submodel rather than in generated code. "
                     "These never affect `approved`.",
     )
 

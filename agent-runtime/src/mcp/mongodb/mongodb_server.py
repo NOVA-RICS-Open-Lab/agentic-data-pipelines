@@ -1,147 +1,225 @@
-import os
-import httpx
 from mcp.server.fastmcp import FastMCP
-from pymongo import MongoClient, DESCENDING
-from pymongo.errors import PyMongoError
+import sys
+import os
+import logging
 from mcp.server.transport_security import TransportSecuritySettings
+import os
+import asyncio
+from pymongo import MongoClient
+import httpx
+from bson import ObjectId
+from datetime import datetime
 
-mongo_mcp = FastMCP("mongo-mcp")
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stderr)]
+)
+logger = logging.getLogger(__name__)
 
-MONGO_URI         = os.environ.get("MONGO_URI", "mongodb://admin:password123@mongodb:27017")
+mongodb_mcp = FastMCP(
+    "mongodb_server",
+    instructions="""
+        MCP server for MongoDB and Kafka Connect sink management. Tools are grouped as: (1) health & status: mongo_check_status to verify MongoDB and Kafka Connect; (2) collection lifecycle: create_collection, list_collections, delete_collection; (3) Kafka Connect sink lifecycle: create_kafka_sink (verbatim), delete_kafka_sink, list_kafka_sinks; (4) direct data ops: insert_documents, query_documents. All MongoDB access uses the pymongo MongoClient cached via _get_client(). Kafka Connect interactions use the Connect REST API via httpx. Returns are JSON-serialisable dicts following the MCP return contract: top-level 'ok' reflects the actual combined success of all operations performed. Idempotency is explicit (created: False / deleted: False with reason when the resource already exists or is missing).
+    """,
+)
+
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb://mongodb:27017")
 KAFKA_CONNECT_URL = os.environ.get("KAFKA_CONNECT_URL", "http://kafka-connect:8083")
-
-
-# ── Internal helpers ──────────────────────────────────────────────────────────
+CONNECT_TIMEOUT = int(os.environ.get("CONNECT_TIMEOUT", "15"))
+_CLIENT = None
 
 def _make_client() -> MongoClient:
     return MongoClient(MONGO_URI)
 
+def _get_client() -> MongoClient:
+    global _CLIENT
+    if _CLIENT is None:
+        _CLIENT = _make_client()
+    return _CLIENT
 
-# ── Health ────────────────────────────────────────────────────────────────────
+def _serialize_value(value):
+    if isinstance(value, ObjectId):
+        return str(value)
+    elif isinstance(value, datetime):
+        return value.isoformat()
+    elif isinstance(value, dict):
+        return {k: _serialize_value(v) for k, v in value.items()}
+    elif isinstance(value, list):
+        return [_serialize_value(v) for v in value]
+    else:
+        return value
 
-@mongo_mcp.tool()
+def _serialize_doc(doc):
+    return {k: _serialize_value(v) for k, v in doc.items()}
+
+def _connector_name_from_topic(topic: str) -> str:
+    return f"mongo-sink-{topic.replace('.', '-') }"
+
+@mongodb_mcp.tool()
 async def mongo_check_status() -> dict:
     """
-    Check if MongoDB and Kafka Connect are reachable.
-    Always call this first before setting up any sink or querying data.
+    Check that MongoDB and Kafka Connect are available. Returns ok=True only if both services responded successfully. Always reports the MongoDB database list when available and the Kafka Connect connector list when available. On partial failure, ok=False and errors are reported alongside any successful sub-results.
     """
-    mongo_ok = False
-    connect_ok = False
-    mongo_error = None
-    connect_error = None
-    databases = []
-
+    client = _get_client()
     try:
-        client = _make_client()
-        client.admin.command("ping")
-        databases = [
-            d for d in client.list_database_names()
-            if d not in ["admin", "config", "local"]
-        ]
-        mongo_ok = True
+        dbs = await asyncio.to_thread(client.list_database_names)
     except Exception as e:
-        mongo_error = str(e)
+        return {"ok": False, "error": f"MongoDB error: {str(e)}"}
 
+    # Check Kafka Connect
     try:
-        async with httpx.AsyncClient() as http:
-            resp = await http.get(f"{KAFKA_CONNECT_URL}/connectors", timeout=5)
+        async with httpx.AsyncClient(timeout=CONNECT_TIMEOUT) as http:
+            resp = await http.get(f"{KAFKA_CONNECT_URL}/connectors")
             resp.raise_for_status()
-            connect_ok = True
+            connectors = resp.json()
     except Exception as e:
-        connect_error = str(e)
+        # Mongo succeeded but Kafka failed -> overall failure per partial-failure rule
+        return {"ok": False, "error": f"Kafka Connect error: {str(e)}", "databases": dbs}
 
-    return {
-        "mongodb": {
-            "reachable": mongo_ok,
-            "address": MONGO_URI,
-            "databases": databases,
-            "error": mongo_error
-        },
-        "kafka_connect": {
-            "reachable": connect_ok,
-            "address": KAFKA_CONNECT_URL,
-            "error": connect_error
-        }
-    }
+    return {"ok": True, "databases": dbs, "connectors": connectors}
 
-
-# ── Collection Management ─────────────────────────────────────────────────────
-
-@mongo_mcp.tool()
-async def create_collection(
-    database: str,
-    collection: str,
-) -> dict:
+@mongodb_mcp.tool()
+async def create_collection(database: str, collection: str) -> dict:
     """
-    Create a MongoDB collection.
-    Always create the collection BEFORE deploying a Kafka sink that writes to it.
+    Create a collection in the given MongoDB database if it does not already exist. Returns created: True when created, created: False with reason when it already exists. On error returns ok=False and an error string.
+    """
+    client = _get_client()
+    try:
+        db = client[database]
+        existing = await asyncio.to_thread(db.list_collection_names)
+        if collection in existing:
+            return {"ok": True, "created": False, "reason": "collection_already_exists"}
+        await asyncio.to_thread(db.create_collection, collection)
+        return {"ok": True, "created": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
-    Use naming convention matching your Kafka topics:
-      database:   asset or project name  e.g. 'kuka'
-      collection: data type              e.g. 'joint_readings'
+@mongodb_mcp.tool()
+async def list_collections(database: str) -> dict:
+    """
+    List collections present in the specified MongoDB database. Returns ok=True and a 'collections' list on success. On error returns ok=False and an error string.
+    """
+    client = _get_client()
+    try:
+        db = client[database]
+        collections = await asyncio.to_thread(db.list_collection_names)
+        return {"ok": True, "collections": collections}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
-    database:   database name
-    collection: collection name
+@mongodb_mcp.tool()
+async def delete_collection(database: str, collection: str) -> dict:
+    """
+    Drop (delete) the named collection from the database, removing all documents. Idempotent: if the collection does not exist, returns ok=True with dropped: False and reason 'not_found'. On success returns dropped: True. On error returns ok=False and an error string.
+    """
+    client = _get_client()
+    try:
+        db = client[database]
+        existing = await asyncio.to_thread(db.list_collection_names)
+        if collection not in existing:
+            return {"ok": True, "dropped": False, "reason": "not_found"}
+        await asyncio.to_thread(db[collection].drop)
+        return {"ok": True, "dropped": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+@mongodb_mcp.tool()
+async def delete_kafka_sink(topic: str) -> dict:
+    """
+    Delete a Kafka Connect MongoDB sink connector that was created for the given topic. Connector name is derived with the ConnectorNaming rule: 'mongo-sink-' + topic with dots replaced by hyphens. The MongoDB collection and its documents are preserved. Idempotent: if connector not found, returns ok=True with deleted: False and reason 'not_found'. On successful deletion returns deleted: True. On HTTP or other error returns ok=False with error details.
+    """
+    connector_name = _connector_name_from_topic(topic)
+    try:
+        async with httpx.AsyncClient(timeout=CONNECT_TIMEOUT) as http:
+            resp = await http.delete(f"{KAFKA_CONNECT_URL}/connectors/{connector_name}")
+            if resp.status_code == 404:
+                return {"ok": True, "deleted": False, "reason": "not_found", "connector": connector_name}
+            try:
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                # Non-404 HTTP error
+                return {"ok": False, "error": f"HTTP error {e.response.status_code}", "detail": e.response.text}
+            return {"ok": True, "deleted": True, "connector": connector_name}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+@mongodb_mcp.tool()
+async def list_kafka_sinks() -> dict:
+    """
+    List Kafka Connect connectors whose names start with 'mongo-sink-'. For each such connector include its name and the status object retrieved from Connect's /connectors/{name}/status endpoint. Returns ok=True only if all relevant connector statuses were fetched successfully; partial failures cause ok=False and error details per-connector.
     """
     try:
-        client = _make_client()
-        client[database].create_collection(collection)
-        return {
-            "status": "created",
-            "database": database,
-            "collection": collection
-        }
-    except PyMongoError as e:
-        return {"status": "error", "error": str(e)}
+        async with httpx.AsyncClient(timeout=CONNECT_TIMEOUT) as http:
+            list_resp = await http.get(f"{KAFKA_CONNECT_URL}/connectors")
+            list_resp.raise_for_status()
+            connector_names = list_resp.json()
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to list connectors: {str(e)}"}
 
+    results = []
+    overall_ok = True
+    for name in connector_names:
+        if not name.startswith("mongo-sink-"):
+            continue
+        try:
+            async with httpx.AsyncClient(timeout=CONNECT_TIMEOUT) as http:
+                status_resp = await http.get(f"{KAFKA_CONNECT_URL}/connectors/{name}/status")
+                status_resp.raise_for_status()
+                status = status_resp.json()
+                results.append({"name": name, "status": status})
+        except Exception as e:
+            results.append({"name": name, "error": str(e)})
+            overall_ok = False
 
-@mongo_mcp.tool()
-async def list_collections(database: str) -> list:
+    return {"ok": overall_ok, "connectors": results}
+
+@mongodb_mcp.tool()
+async def insert_documents(database: str, collection: str, documents: list) -> dict:
     """
-    List all collections in a database.
-    Use this to verify a collection exists before deploying a sink against it.
-
-    database: database name to list collections from
+    Insert one or more documents directly into the given MongoDB collection. 'documents' must be a non-empty list of dicts. Returns inserted_count on success and the inserted ids serialized as strings. On error returns ok=False and an error string.
     """
+    if not documents or not isinstance(documents, list):
+        return {"ok": False, "error": "`documents` must be a non-empty list"}
+    client = _get_client()
     try:
-        client = _make_client()
-        return client[database].list_collection_names()
-    except PyMongoError as e:
-        return [{"error": str(e)}]
+        db = client[database]
+        coll = db[collection]
+        if len(documents) == 1:
+            result = await asyncio.to_thread(coll.insert_one, documents[0])
+            inserted_ids = [str(result.inserted_id)]
+            inserted_count = 1
+        else:
+            result = await asyncio.to_thread(coll.insert_many, documents)
+            inserted_ids = [str(_id) for _id in result.inserted_ids]
+            inserted_count = len(inserted_ids)
+        return {"ok": True, "inserted_count": inserted_count, "inserted_ids": inserted_ids}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
-
-@mongo_mcp.tool()
-async def delete_collection(
-    database: str,
-    collection: str,
-) -> dict:
+@mongodb_mcp.tool()
+async def query_documents(database: str, collection: str, filter_doc: dict | None = None, sort_field: str | None = None, sort_direction: int = 1, limit: int = 100) -> dict:
     """
-    Delete a MongoDB collection and all its documents. This is irreversible.
-    Always stop any active Kafka sink writing to this collection before deleting.
-
-    database:   database name
-    collection: collection name to delete
+    Query documents from a MongoDB collection. filter_doc is an optional Mongo filter dict. If no sort_field is provided and filter_doc is empty, results default to sorting descending on 'timestamp'. sort_direction is 1 (asc) or -1 (desc). limit bounds the number of returned documents. Returns serialized documents on success. On error returns ok=False and an error string.
     """
+    client = _get_client()
     try:
-        client = _make_client()
-        client[database].drop_collection(collection)
-        return {
-            "status": "deleted",
-            "database": database,
-            "collection": collection
-        }
-    except PyMongoError as e:
-        return {"status": "error", "error": str(e)}
+        db = client[database]
+        coll = db[collection]
+        filter_doc = filter_doc or {}
+        if not sort_field:
+            # Default to most recent first on 'timestamp' when caller did not request sorting
+            sort_field = "timestamp"
+            sort_direction = -1
+        cursor = coll.find(filter_doc).sort(sort_field, sort_direction).limit(limit)
+        docs = await asyncio.to_thread(lambda: list(cursor))
+        serialized_docs = [_serialize_doc(d) for d in docs]
+        return {"ok": True, "documents": serialized_docs}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
-
-# ── Kafka Connect Sink ────────────────────────────────────────────────────────
-
-@mongo_mcp.tool()
-async def create_kafka_sink(
-    topic: str,
-    database: str,
-    collection: str,
-) -> dict:
+@mongodb_mcp.tool()
+async def create_kafka_sink(topic: str, database: str, collection: str) -> dict:
     """
     Connect a Kafka topic to a MongoDB collection via Kafka Connect.
     Messages from the topic are continuously inserted as documents automatically.
@@ -152,7 +230,7 @@ async def create_kafka_sink(
     database:   target MongoDB database      e.g. 'kuka'
     collection: target MongoDB collection    e.g. 'joint_readings'
     """
-    connector_name = f"mongo-sink-{topic.replace('.', '-')}"
+    connector_name = f"mongo-sink-{topic.replace('.', '-') }"
     config = {
         "name": connector_name,
         "config": {
@@ -166,179 +244,35 @@ async def create_kafka_sink(
         }
     }
     try:
-        async with httpx.AsyncClient() as http:
+        async with httpx.AsyncClient(timeout=CONNECT_TIMEOUT) as http:
             resp = await http.post(
                 f"{KAFKA_CONNECT_URL}/connectors",
                 json=config,
-                headers={"Content-Type": "application/json"},
-                timeout=15
+                headers={"Content-Type": "application/json"}
             )
             resp.raise_for_status()
-            return {
-                "status": "deployed",
-                "connector": connector_name,
-                "topic": topic,
-                "database": database,
-                "collection": collection
-            }
+            return {"ok": True, "status": "deployed", "connector": connector_name, "topic": topic, "database": database, "collection": collection}
     except httpx.HTTPStatusError as e:
-        return {"status": "error", "error": str(e), "detail": e.response.text}
-
-
-@mongo_mcp.tool()
-async def delete_kafka_sink(topic: str) -> dict:
-    """
-    Stop and remove a Kafka Connect sink connector.
-    The collection and its data are preserved — only the connector is removed.
-
-    topic: Kafka topic the sink is consuming from e.g. 'opcua.kuka.processed'
-    """
-    connector_name = f"mongo-sink-{topic.replace('.', '-')}"
-    try:
-        async with httpx.AsyncClient() as http:
-            resp = await http.delete(
-                f"{KAFKA_CONNECT_URL}/connectors/{connector_name}",
-                timeout=15
-            )
-            if resp.status_code == 404:
-                return {"status": "not_found", "connector": connector_name}
-            resp.raise_for_status()
-            return {"status": "deleted", "connector": connector_name}
-    except httpx.HTTPStatusError as e:
-        return {"status": "error", "error": str(e)}
-
-
-@mongo_mcp.tool()
-async def list_kafka_sinks() -> list:
-    """
-    List all active Kafka Connect sink connectors and their status.
-    Use this to verify a sink is running after deployment.
-    Status will be one of: RUNNING, PAUSED, FAILED.
-    """
-    try:
-        async with httpx.AsyncClient() as http:
-            resp = await http.get(
-                f"{KAFKA_CONNECT_URL}/connectors?expand=status",
-                timeout=10
-            )
-            resp.raise_for_status()
-            connectors = resp.json()
-
-        return [
-            {
-                "connector": name,
-                "status": info["status"]["connector"]["state"],
-                "tasks": [
-                    {
-                        "id": t["id"],
-                        "state": t["state"]
-                    }
-                    for t in info["status"].get("tasks", [])
-                ]
-            }
-            for name, info in connectors.items()
-            if "mongo-sink" in name
-        ]
-    except httpx.HTTPStatusError as e:
-        return [{"error": str(e)}]
-
-
-# ── Direct Insert (non-Kafka sources) ─────────────────────────────────────────
-
-@mongo_mcp.tool()
-async def insert_document(
-    database: str,
-    collection: str,
-    document: dict,
-) -> dict:
-    """
-    Insert a single document directly into MongoDB.
-    Use this for sources that write directly to MongoDB
-    rather than going through a Kafka topic.
-
-    database:   target database
-    collection: target collection
-    document:   JSON document to insert
-    """
-    try:
-        client = _make_client()
-        result = client[database][collection].insert_one(document)
-        return {
-            "status": "inserted",
-            "database": database,
-            "collection": collection,
-            "inserted_id": str(result.inserted_id)
-        }
-    except PyMongoError as e:
-        return {"status": "error", "error": str(e)}
-
-
-# ── Context queries (agent reads) ─────────────────────────────────────────────
-
-@mongo_mcp.tool()
-async def get_latest(
-    database: str,
-    collection: str,
-    n: int = 10,
-) -> list:
-    """
-    Get the n most recent documents from a collection.
-    Use this to give the agent context about the current state of an asset
-    before making decisions e.g. check last Kuka readings before adjusting pipeline.
-
-    database:   database name
-    collection: collection name
-    n:          number of documents to return (default 10)
-    """
-    try:
-        client = _make_client()
-        docs = list(
-            client[database][collection]
-            .find({}, {"_id": 0})
-            .sort("timestamp", DESCENDING)
-            .limit(n)
-        )
-        return docs
-    except PyMongoError as e:
-        return [{"error": str(e)}]
-
-
-@mongo_mcp.tool()
-async def query_documents(
-    database: str,
-    collection: str,
-    filter: dict = {},
-    limit: int = 100,
-) -> list:
-    """
-    Query documents from a MongoDB collection using a MongoDB filter.
-    Use this when the agent needs specific historical data for context.
-
-    Examples:
-      filter={"quality": "good"}
-      filter={"data.value_deg": {"$gt": 90}}
-      filter={"source_type": "opcua", "asset_id": "kuka"}
-
-    database:   database name
-    collection: collection name
-    filter:     MongoDB query filter (default {} returns all documents)
-    limit:      maximum documents to return (default 100)
-    """
-    try:
-        client = _make_client()
-        docs = list(
-            client[database][collection]
-            .find(filter, {"_id": 0})
-            .limit(limit)
-        )
-        return docs
-    except PyMongoError as e:
-        return [{"error": str(e)}]
+        if e.response.status_code == 409:
+            # Conflict means connector exists - report existing connector
+            return {"ok": False, "status": "conflict_exists", "message": f"Connector {connector_name} already exists"}
+        return {"ok": False, "status": "error", "error": str(e), "detail": e.response.text}
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8085))
-    mongo_mcp.settings.port = port
-    mongo_mcp.settings.host = "0.0.0.0"
-    mongo_mcp.settings.transport_security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
-    mongo_mcp.run(transport="streamable-http")
+    mode = os.getenv("MCP_CONNECTION_MODE", "stdio").lower()
+    logger.info(f"Starting MongoDB MCP server in {mode} mode")
+
+    if mode == "http":
+        PORT_VAR = "MONGODB_MCP_PORT"
+        port = int(os.getenv("PORT") or os.getenv(PORT_VAR) or 8110)
+        logger.info(f"HTTP mode - listening on port {port} (set PORT or {PORT_VAR} to override)")
+        mongodb_mcp.settings.port = port
+        mongodb_mcp.settings.host = "0.0.0.0"
+        mongodb_mcp.settings.transport_security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=False
+        )
+        mongodb_mcp.run(transport="streamable-http")
+    else:
+        logger.info("STDIO mode")
+        mongodb_mcp.run(transport="stdio")

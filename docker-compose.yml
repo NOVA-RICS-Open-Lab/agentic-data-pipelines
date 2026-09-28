@@ -389,25 +389,25 @@ services:
   #   networks:
   #     - agentic-net
 
-  mongo-mcp-service:
-    profiles: ["http"]
-    build: ./agent-runtime
-    container_name: mongo-mcp-service
-    command: python -m src.mcp.mongodb.mongodb_server
-    ports:
-      - "8085:8085"
-    env_file:
-      - .env
-    environment:
-      - MCP_CONNECTION_MODE=http
-      - PORT=8085
-      - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:27017
-      - KAFKA_CONNECT_URL=http://kafka-connect:8083
-    depends_on:
-      - mongodb
-      - kafka-connect
-    networks:
-      - agentic-net
+  # mongo-mcp-service:
+  #   profiles: ["http"]
+  #   build: ./agent-runtime
+  #   container_name: mongo-mcp-service
+  #   command: python -m src.mcp.mongodb.mongodb_server
+  #   ports:
+  #     - "8085:8085"
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - MCP_CONNECTION_MODE=http
+  #     - PORT=8085
+  #     - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:27017
+  #     - KAFKA_CONNECT_URL=http://kafka-connect:8083
+  #   depends_on:
+  #     - mongodb
+  #     - kafka-connect
+  #   networks:
+  #     - agentic-net
 
   # node-red:
   #   build: ./agent-runtime/src/mcp/node_red
@@ -440,6 +440,28 @@ services:
     networks:
       - agentic-net
 
+  
+  opcua-kafka-mcp-service:
+    profiles: ["http"]
+    build: ./agent-runtime
+    container_name: opcua-kafka-mcp-service
+    command: python src/mcp/opcua-kafka/opcua_kafka_server.py
+    ports:
+      - "8097:8097"
+    env_file:
+      - .env
+    environment:
+      - MCP_CONNECTION_MODE=http
+      - PORT=8097
+      - COMPOSE_PROJECT_NAME=agentic-data-pipelines
+      - COMPOSE_FILE=/workspace/docker-compose.yml
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/workspace
+    networks:
+      - agentic-net
+  
+
   opcua-kafka:
     build: ./agent-runtime
     container_name: opcua-kafka
@@ -455,7 +477,7 @@ services:
       - url=opc.tcp://kuka-robot:4849
       - namespace=http://fct.unl.pt/kuka_robot/
       - bootstrap_server=broker:9092
-      - topic=opcua.kuka_robot.raw
+      - topic=${topic:-opcua.kuka.raw}
       - folder=Kuka_Robot
     networks:
       - agentic-net
@@ -475,25 +497,25 @@ services:
     networks:
       - agentic-net
 
-  grafana-mcp-service:
-    profiles: ["http"]
-    build: ./agent-runtime
-    container_name: grafana-mcp-service
-    command: python -m src.mcp.grafana.grafana_server 
-    ports:
-      - "8089:8089"
-    env_file:
-      - .env
-    environment:
-      - MCP_CONNECTION_MODE=http
-      - PORT=8089
-      - GRAFANA_URL=http://grafana:3000
-      - GRAFANA_ADMIN_USER=${GRAFANA_USER}
-      - GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASSWORD}  
-    depends_on:
-      - grafana
-    networks:
-      - agentic-net
+  # grafana-mcp-service:
+  #   profiles: ["http"]
+  #   build: ./agent-runtime
+  #   container_name: grafana-mcp-service
+  #   command: python -m src.mcp.grafana.grafana_server 
+  #   ports:
+  #     - "8089:8089"
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - MCP_CONNECTION_MODE=http
+  #     - PORT=8089
+  #     - GRAFANA_URL=http://grafana:3000
+  #     - GRAFANA_ADMIN_USER=${GRAFANA_USER}
+  #     - GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASSWORD}  
+  #   depends_on:
+  #     - grafana
+  #   networks:
+  #     - agentic-net
       
  
 
@@ -638,8 +660,95 @@ services:
       - ./agent-runtime/generated:/app/generated
     networks:
       - agentic-net
+  
+  opcua-ingest:
+    build: ./agent-runtime
+    container_name: opcua-ingest
+    restart: unless-stopped
+    command: uvicorn src.api.opcua_http_bridge.opcua_ingest:app --host 0.0.0.0 --port 8098
+    env_file:
+      - .env
+    environment:
+      - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:27017
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8098/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - agentic-net
+
+  opcua-http:
+    build: ./agent-runtime
+    container_name: opcua-http
+    restart: unless-stopped
+    command: python src/mcp/opcua-http/opcua_http_bridge.py
+    depends_on:
+      opcua-ingest:
+        condition: service_healthy
+      kuka-robot:
+        condition: service_started
+    environment:
+      - url=opc.tcp://kuka-robot:4849
+      - namespace=http://fct.unl.pt/kuka_robot/
+      - folder=Kuka_Robot
+      - target_url=http://opcua-ingest:8098/ingest/${OPCUA_HTTP_DATABASE:-kuka}/${OPCUA_HTTP_COLLECTION:-opcua_raw}
+    networks:
+      - agentic-net
 
 # ===== AUTO-DEPLOYED MCP SERVERS =====
+  opcua_http_bridge-mcp-service:
+    build: ./agent-runtime
+    container_name: opcua_http_bridge-mcp-service
+    command: python -m src.mcp.opcua_http_bridge.opcua_http_bridge_server
+    ports:
+      - "9105:9105"
+    env_file:
+      - .env
+    environment:
+      - MCP_CONNECTION_MODE=http
+      - PORT=9105
+      - COMPOSE_FILE=/workspace/docker-compose.yml
+      - COMPOSE_PROJECT_NAME=agentic-data-pipelines
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/workspace
+    networks:
+      - agentic-net
+
+  grafana-mcp-service:
+    build: ./agent-runtime
+    container_name: grafana-mcp-service
+    command: python -m src.mcp.grafana.grafana_server
+    ports:
+      - "9103:9103"
+    env_file:
+      - .env
+    environment:
+      - MCP_CONNECTION_MODE=http
+      - PORT=9102
+    networks:
+      - agentic-net
+
+  mongodb-mcp-service:
+    build: ./agent-runtime
+    container_name: mongodb-mcp-service
+    command: python -m src.mcp.mongodb.mongodb_server
+    ports:
+      - "9101:9101"
+    env_file:
+      - .env
+    environment:
+      - MCP_CONNECTION_MODE=http
+      - PORT=9101
+    networks:
+      - agentic-net
+
+
   kafka_confluent-mcp-service:
     build: ./agent-runtime
     container_name: kafka_confluent-mcp-service

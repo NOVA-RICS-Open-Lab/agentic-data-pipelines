@@ -1,6 +1,7 @@
 FROM python:3.12-slim
 
 RUN apt-get update && apt-get install -y docker.io && rm -rf /var/lib/apt/lists/*
+ADD --chmod=755 https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 /usr/local/lib/docker/cli-plugins/docker-compose
 
 WORKDIR /app
 
