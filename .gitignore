@@ -5,7 +5,10 @@ build/
 dist/
 wheels/
 *.egg-info
-
+# folders
+broker/data/
+mongodb/data/
+zookeeper/data/
 # Virtual environments
 .venv
 .env
